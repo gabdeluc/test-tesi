@@ -1,0 +1,43 @@
+# ============================================
+# MOCK DATA CONFIGURATION
+# ============================================
+
+# Frasi di esempio per generare transcript
+sample_phrases:
+  - "Hello everyone, welcome to today's meeting."
+  - "Thank you for having me here."
+  - "Let me share my screen to show you the presentation."
+  - "I think we should focus on the main objectives first."
+  - "Can everyone see the slides?"
+  - "That's a great point, I completely agree."
+  - "Does anyone have any questions so far?"
+  - "We need to make a decision on this by the end of the week."
+  - "I'll follow up with an email after this meeting."
+  - "Let's move on to the next topic on the agenda."
+
+# Partecipanti predefiniti
+participants:
+  - id: "fj93829"
+    name: "Alice"
+  - id: "dkd9320"
+    name: "Bob"
+  - id: "abc1234"
+    name: "Charlie"
+
+# Configurazione meeting
+meetings:
+  - id: "mtg001"
+    date: "2024-06-01T10:00:00Z"
+    num_entries: 20 # Numero di messaggi da generare
+  - id: "mtg002"
+    date: "2024-06-02T14:00:00Z"
+    num_entries: 30
+  - id: "mtg003"
+    date: "2024-06-03T09:00:00Z"
+    num_entries: 15
+
+# Configurazione generazione
+generation:
+  min_duration_seconds: 3 # Durata minima di un messaggio
+  max_pause_seconds: 3 # Pausa massima tra messaggi
+  chars_per_second: 15 # Velocità di speaking simulata
