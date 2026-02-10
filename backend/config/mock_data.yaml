@@ -4,16 +4,42 @@
 
 # Frasi di esempio per generare transcript
 sample_phrases:
+  # --- Standard / Neutrali ---
   - "Hello everyone, welcome to today's meeting."
-  - "Thank you for having me here."
   - "Let me share my screen to show you the presentation."
-  - "I think we should focus on the main objectives first."
   - "Can everyone see the slides?"
-  - "That's a great point, I completely agree."
-  - "Does anyone have any questions so far?"
-  - "We need to make a decision on this by the end of the week."
-  - "I'll follow up with an email after this meeting."
   - "Let's move on to the next topic on the agenda."
+  - "I'll follow up with an email after this meeting."
+  
+  # --- Sentiment: Positivo / Accordo (Test per colore Verde/Positivo) ---
+  - "That's a great point, I completely agree with you."
+  - "Fantastic work on this module, the performance is impressive."
+  - "I am really optimistic about these results, we are on the right track."
+  - "Yes! Exactly what I was thinking."
+  - "Perfect, let's lock this decision."
+
+  # --- Sentiment: Negativo / Conflitto (Test per colore Rosso/Allerta) ---
+  - "I honestly don't think this is going to work."
+  - "We are wasting time discussing this again."
+  - "This is unacceptable, the deadline was yesterday!"
+  - "I strongly disagree. The data suggests the opposite."
+  - "If we continue like this, the project will fail."
+
+  # --- Lunghezza: Molto Brevi (Test per layout compatto) ---
+  - "No."
+  - "Sure."
+  - "Why?"
+  - "Agreed."
+  - "Go on."
+
+  # --- Lunghezza: Molto Lunghe (Test per text-wrapping e scroll del Widget) ---
+  - "If we look closely at the quarterly report, specifically section four regarding user retention, we can clearly see a downward trend that implies we need to completely overhaul our onboarding strategy before the next release cycle begins."
+  - "I understand your concern, but we have to consider the technical debt we would incur if we choose the quick fix instead of the proper architectural refactoring that the engineering team has been asking for since last month."
+
+  # --- Incertezza / Domande ---
+  - "I'm not sure... maybe we should wait?"
+  - "Does anyone know why the server crashed?"
+  - "What happens if we miss the target?"
 
 # Partecipanti predefiniti
 participants:

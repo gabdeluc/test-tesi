@@ -7,104 +7,68 @@ function App() {
   // STATE MANAGEMENT
   // ============================================
   
-  // UI State
-  const [activeTab, setActiveTab] = useState('sentiment') // Default: sentiment
+  const [isPanelOpen, setIsPanelOpen] = useState(false)
+  const [activeView, setActiveView] = useState('overview')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
-  
-  // Shared State
-  const [participants, setParticipants] = useState([])
-  const [selectedParticipant, setSelectedParticipant] = useState('')
-  
-  // Sentiment Analysis State
-  const [sentimentText, setSentimentText] = useState('')
-  const [sentimentResult, setSentimentResult] = useState(null)
   const [transcriptSentiment, setTranscriptSentiment] = useState(null)
-  
-  // Similarity Search State
-  const [similarityQuery, setSimilarityQuery] = useState('')
   const [similarResults, setSimilarResults] = useState(null)
-  const [topK, setTopK] = useState(5)
+  const [searchQuery, setSearchQuery] = useState('')
+
+  // ============================================
+  // LOGICA CALCOLO DATI (MESSAGGI, PARTECIPANTI, DURATA)
+  // ============================================
+
+  // Calcoliamo i dati per la dashboard principale solo se transcriptSentiment esiste
+  const dashboardStats = transcriptSentiment ? {
+    messages: transcriptSentiment.transcript.length,
+    participants: new Set(transcriptSentiment.transcript.map(t => t.nickname)).size,
+    // Prendiamo il timestamp dell'ultimo messaggio come durata approssimativa
+    duration: transcriptSentiment.transcript.length > 0 
+      ? transcriptSentiment.transcript[transcriptSentiment.transcript.length - 1].from 
+      : "00:00",
+    // Stima grezza dei token (caratteri / 4 è una media standard per l'inglese/italiano)
+    tokens: Math.round(transcriptSentiment.transcript.reduce((acc, curr) => acc + curr.text.length, 0) / 4)
+  } : {
+    messages: '-',
+    participants: '-',
+    duration: '-',
+    tokens: '-'
+  }
 
   // ============================================
   // EFFECTS
   // ============================================
   
   useEffect(() => {
-    loadParticipants()
-  }, [])
+    if (isPanelOpen && !transcriptSentiment && !loading) {
+      loadTranscriptSentiment()
+    }
+  }, [isPanelOpen])
 
   // ============================================
   // API CALLS
   // ============================================
   
-  const loadParticipants = async () => {
-    try {
-      const response = await fetch(`${API_URL}/participants`)
-      const data = await response.json()
-      setParticipants(data.participants)
-    } catch (err) {
-      console.error('Errore caricamento partecipanti:', err)
-    }
-  }
-
-  const analyzeSingleSentiment = async () => {
-    if (!sentimentText.trim()) {
-      setError('Inserisci un testo da analizzare')
-      return
-    }
-    
+  const loadTranscriptSentiment = async () => {
     setLoading(true)
     setError(null)
     
     try {
-      const response = await fetch(`${API_URL}/sentiment/analyze`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: sentimentText })
-      })
-      
-      if (!response.ok) throw new Error(`HTTP ${response.status}`)
-      
-      const data = await response.json()
-      setSentimentResult(data)
-    } catch (err) {
-      setError(err.message)
-      setSentimentResult(null)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const analyzeTranscriptSentiment = async () => {
-    setLoading(true)
-    setError(null)
-    
-    try {
-      let url = `${API_URL}/meeting/mtg001/sentiment?include_embeddings=false`
-      if (selectedParticipant) {
-        url += `&participant_id=${selectedParticipant}`
-      }
-      
-      const response = await fetch(url)
-      if (!response.ok) throw new Error(`HTTP ${response.status}`)
-      
+      const response = await fetch(`${API_URL}/meeting/mtg001/sentiment?include_embeddings=false`)
+      if (!response.ok) throw new Error(`Status ${response.status}`)
       const data = await response.json()
       setTranscriptSentiment(data)
     } catch (err) {
-      setError(err.message)
+      setError('Impossibile sincronizzare i dati della sessione.')
       setTranscriptSentiment(null)
     } finally {
       setLoading(false)
     }
   }
 
-  const searchSimilarMessages = async () => {
-    if (!similarityQuery.trim()) {
-      setError('Inserisci una query di ricerca')
-      return
-    }
-    
+  const searchSimilar = async () => {
+    if (!searchQuery.trim()) return
     setLoading(true)
     setError(null)
     
@@ -112,22 +76,21 @@ function App() {
       const response = await fetch(`${API_URL}/meeting/mtg001/similarity`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          query: similarityQuery,
-          top_k: topK 
-        })
+        body: JSON.stringify({ query: searchQuery, top_k: 5 })
       })
-      
-      if (!response.ok) throw new Error(`HTTP ${response.status}`)
-      
+      if (!response.ok) throw new Error(`Status ${response.status}`)
       const data = await response.json()
       setSimilarResults(data)
+      setActiveView('similarity')
     } catch (err) {
-      setError(err.message)
-      setSimilarResults(null)
+      setError('Errore nel motore di ricerca semantica.')
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleSearchKeyPress = (e) => {
+    if (e.key === 'Enter') searchSimilar()
   }
 
   // ============================================
@@ -135,52 +98,176 @@ function App() {
   // ============================================
 
   return (
-    <div style={styles.container}>
-      {/* Header */}
-      <Header />
+    <div style={styles.appContainer}>
+      {/* SIDEBAR - Dark & Professional */}
+      <div style={styles.sidebar}>
+        <div style={styles.sidebarHeader}>
+          <div style={styles.logoCircle}>M</div>
+          <span style={styles.logoText}>MEETING<br/>INTELLIGENCE</span>
+        </div>
 
-      {/* Tab Navigation */}
-      <TabNavigation 
-        activeTab={activeTab} 
-        setActiveTab={setActiveTab} 
-      />
-
-      {/* Main Content */}
-      <div style={styles.content}>
-        {/* Error Display */}
-        {error && <ErrorMessage message={error} onClose={() => setError(null)} />}
-
-        {/* Tab Content */}
-        {activeTab === 'sentiment' && (
-          <SentimentTab
-            sentimentText={sentimentText}
-            setSentimentText={setSentimentText}
-            loading={loading}
-            analyzeSingleSentiment={analyzeSingleSentiment}
-            sentimentResult={sentimentResult}
-            participants={participants}
-            selectedParticipant={selectedParticipant}
-            setSelectedParticipant={setSelectedParticipant}
-            analyzeTranscriptSentiment={analyzeTranscriptSentiment}
-            transcriptSentiment={transcriptSentiment}
+        <div style={styles.sidebarNav}>
+          <SidebarItem 
+            label="Dashboard Operativa"
+            onClick={() => setIsPanelOpen(false)}
+            active={!isPanelOpen}
           />
-        )}
-
-        {activeTab === 'similarity' && (
-          <SimilarityTab
-            similarityQuery={similarityQuery}
-            setSimilarityQuery={setSimilarityQuery}
-            topK={topK}
-            setTopK={setTopK}
-            loading={loading}
-            searchSimilarMessages={searchSimilarMessages}
-            similarResults={similarResults}
+          <SidebarItem 
+            label="Analisi AI"
+            onClick={() => setIsPanelOpen(!isPanelOpen)}
+            active={isPanelOpen}
+            badge={transcriptSentiment ? 'Ready' : null}
           />
-        )}
+          <SidebarItem 
+            label="Configurazione"
+            onClick={() => alert('Funzionalità riservata agli amministratori')}
+          />
+        </div>
+
+        <div style={styles.sidebarFooter}>
+          <div style={styles.userProfile}>
+            <div style={styles.userAvatar}>AD</div>
+            <div style={styles.userInfo}>
+              <span style={styles.userName}>Admin User</span>
+              <span style={styles.userRole}>Enterprise Plan</span>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* Footer */}
-      <Footer />
+      {/* SLIDE-OUT PANEL */}
+      {isPanelOpen && (
+        <div style={styles.panel}>
+          <div style={styles.panelHeader}>
+            <div>
+              <h2 style={styles.panelTitle}>Analisi Riunione</h2>
+              <span style={styles.panelSubtitle}>ID: MTG-001 • Elaborazione Completata</span>
+            </div>
+            <button
+              onClick={() => setIsPanelOpen(false)}
+              style={styles.panelClose}
+            >
+              ✕
+            </button>
+          </div>
+
+          <div style={styles.searchContainer}>
+            <input
+              type="text"
+              placeholder="Cerca insights nel transcript..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyPress={handleSearchKeyPress}
+              style={styles.searchInput}
+            />
+          </div>
+
+          <div style={styles.tabContainer}>
+            <TabButton
+              label="Overview"
+              active={activeView === 'overview'}
+              onClick={() => setActiveView('overview')}
+            />
+            <TabButton
+              label="Transcript"
+              active={activeView === 'messages'}
+              onClick={() => setActiveView('messages')}
+            />
+            {similarResults && (
+              <TabButton
+                label={`Risultati (${similarResults.similar_messages.length})`}
+                active={activeView === 'similarity'}
+                onClick={() => setActiveView('similarity')}
+              />
+            )}
+          </div>
+
+          <div style={styles.panelContent}>
+            {error && (
+              <div style={styles.errorBanner}>
+                <div style={styles.errorDot}></div>
+                {error}
+              </div>
+            )}
+
+            {loading && (
+              <div style={styles.loadingContainer}>
+                <div style={styles.loaderLine}></div>
+                <p>Elaborazione NLP in corso...</p>
+              </div>
+            )}
+
+            {!loading && transcriptSentiment && activeView === 'overview' && (
+              <OverviewView data={transcriptSentiment} />
+            )}
+
+            {!loading && transcriptSentiment && activeView === 'messages' && (
+              <MessagesView data={transcriptSentiment} />
+            )}
+
+            {!loading && similarResults && activeView === 'similarity' && (
+              <SimilarityView data={similarResults} />
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* MAIN CONTENT AREA */}
+      <div style={{
+        ...styles.mainContent,
+        marginLeft: isPanelOpen ? '680px' : '280px' // Sidebar (280) + Panel (400)
+      }}>
+        <div style={styles.topNav}>
+          <span style={styles.breadcrumb}>Home / Meeting / <strong>MTG-001</strong></span>
+          <div style={styles.statusBadge}>
+            {transcriptSentiment ? '● Online' : '○ Offline'}
+          </div>
+        </div>
+
+        <div style={styles.contentWrapper}>
+          <div style={styles.heroSection}>
+            <h1 style={styles.pageTitle}>Meeting Board</h1>
+            <p style={styles.pageSubtitle}>Piattaforma centralizzata per la gestione dei verbali.</p>
+          </div>
+          
+          <div style={styles.mainCard}>
+            <div style={styles.cardHeaderBorder}>
+              <h2 style={styles.cardTitle}>Dettagli Sessione</h2>
+            </div>
+            
+            <div style={styles.cardBody}>
+              <p style={{lineHeight: '1.6', color: '#475569', marginBottom: '2rem'}}>
+                {transcriptSentiment 
+                  ? "I dati visualizzati di seguito sono calcolati in tempo reale dal motore NLP basato sul transcript recuperato." 
+                  : "Nessun dato caricato. Apri il pannello 'Analisi AI' sulla sinistra per inizializzare il caricamento e popolare le statistiche."}
+              </p>
+
+              <div style={styles.statsRow}>
+                <FeatureBox 
+                  title="Messaggi Totali" 
+                  value={dashboardStats.messages} 
+                  icon="💬"
+                />
+                <FeatureBox 
+                  title="Partecipanti" 
+                  value={dashboardStats.participants} 
+                  icon="👥"
+                />
+                <FeatureBox 
+                  title="Durata Stimata" 
+                  value={dashboardStats.duration} 
+                  icon="⏱️"
+                />
+                <FeatureBox 
+                  title="Token (Est.)" 
+                  value={dashboardStats.tokens} 
+                  icon="🔢"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
@@ -189,744 +276,436 @@ function App() {
 // COMPONENTS
 // ============================================
 
-function Header() {
+function SidebarItem({ label, onClick, active, badge }) {
   return (
-    <div style={styles.header}>
-      <h1 style={styles.title}>🤖 AI-Powered Meeting Analytics</h1>
-      <p style={styles.subtitle}>
-        Sentiment Analysis + Semantic Search con BERT & E5
-      </p>
-    </div>
-  )
-}
-
-function TabNavigation({ activeTab, setActiveTab }) {
-  const tabs = [
-    { id: 'sentiment', label: 'Sentiment Analysis', icon: '😊' },
-    { id: 'similarity', label: 'Similarity Search', icon: '🔍' }
-  ]
-
-  return (
-    <div style={styles.tabContainer}>
-      {tabs.map(tab => (
-        <button
-          key={tab.id}
-          onClick={() => setActiveTab(tab.id)}
-          style={{
-            ...styles.tab,
-            ...(activeTab === tab.id ? styles.activeTab : {})
-          }}
-        >
-          {tab.icon} {tab.label}
-        </button>
-      ))}
-    </div>
-  )
-}
-
-function ErrorMessage({ message, onClose }) {
-  return (
-    <div style={styles.error}>
-      <span>⚠️ {message}</span>
-      <button onClick={onClose} style={styles.errorClose}>✕</button>
-    </div>
-  )
-}
-
-// ============================================
-// TAB COMPONENTS
-// ============================================
-
-function SentimentTab({
-  sentimentText, 
-  setSentimentText, 
-  loading, 
-  analyzeSingleSentiment,
-  sentimentResult, 
-  participants, 
-  selectedParticipant, 
-  setSelectedParticipant,
-  analyzeTranscriptSentiment, 
-  transcriptSentiment
-}) {
-  return (
-    <div style={styles.tabGrid}>
-      {/* Single Text Analysis */}
-      <Card>
-        <h2 style={styles.cardTitle}>😊 Analizza Sentiment Testo</h2>
-        <p style={styles.cardDescription}>
-          Usa <strong>BERT microservice</strong> per classificare sentiment 1-5 stelle
-        </p>
-        
-        <textarea
-          value={sentimentText}
-          onChange={(e) => setSentimentText(e.target.value)}
-          placeholder="Scrivi un testo da analizzare... (es: 'This meeting was very productive!')"
-          style={styles.textarea}
-        />
-
-        <ActionButton onClick={analyzeSingleSentiment} loading={loading}>
-          🚀 Analizza Sentiment
-        </ActionButton>
-
-        {sentimentResult && (
-          <ResultBox>
-            <SentimentDisplay result={sentimentResult} />
-          </ResultBox>
-        )}
-      </Card>
-
-      {/* Transcript Analysis */}
-      <Card>
-        <h2 style={styles.cardTitle}>📊 Sentiment Analysis Transcript</h2>
-        <p style={styles.cardDescription}>
-          Analizza sentiment di tutti i messaggi del meeting
-        </p>
-
-        <ParticipantFilter
-          participants={participants}
-          selectedParticipant={selectedParticipant}
-          setSelectedParticipant={setSelectedParticipant}
-        />
-
-        <ActionButton onClick={analyzeTranscriptSentiment} loading={loading}>
-          📈 Analizza Transcript
-        </ActionButton>
-
-        {transcriptSentiment && (
-          <div>
-            <ResultBox>
-              <h3 style={styles.resultTitle}>Statistiche Generali</h3>
-              <MetricsGrid>
-                <MetricCard 
-                  label="Sentiment Medio" 
-                  value={`⭐ ${transcriptSentiment.metadata.sentiment_stats.average_stars}/5.0`}
-                  icon="📈"
-                />
-                <MetricCard 
-                  label="Messaggi Positivi" 
-                  value={`${(transcriptSentiment.metadata.sentiment_stats.positive_ratio * 100).toFixed(0)}%`}
-                  icon="😊"
-                />
-                <MetricCard 
-                  label="Totale Messaggi" 
-                  value={transcriptSentiment.metadata.sentiment_stats.total_analyzed}
-                  icon="💬"
-                />
-              </MetricsGrid>
-            </ResultBox>
-
-            <div style={{ marginTop: '1.5rem' }}>
-              <h3 style={styles.sectionTitle}>Messaggi con Sentiment</h3>
-              <div style={styles.scrollContainer}>
-                {transcriptSentiment.transcript.map((entry, idx) => (
-                  <MessageCard key={idx} entry={entry} />
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-      </Card>
-    </div>
-  )
-}
-
-function SimilarityTab({
-  similarityQuery, 
-  setSimilarityQuery, 
-  topK, 
-  setTopK,
-  loading, 
-  searchSimilarMessages, 
-  similarResults
-}) {
-  return (
-    <Card>
-      <h2 style={styles.cardTitle}>🔍 Ricerca Semantica con E5</h2>
-      <p style={styles.cardDescription}>
-        Usa <strong>E5 microservice</strong> per trovare messaggi simili per significato
-      </p>
-
-      <textarea
-        value={similarityQuery}
-        onChange={(e) => setSimilarityQuery(e.target.value)}
-        placeholder="Inserisci una frase di ricerca... (es: 'We need to make a decision')"
-        style={styles.textareaSmall}
-      />
-
-      <div style={styles.sliderContainer}>
-        <label style={styles.sliderLabel}>
-          Numero di risultati: <strong>{topK}</strong>
-        </label>
-        <input
-          type="range"
-          min="1"
-          max="10"
-          value={topK}
-          onChange={(e) => setTopK(parseInt(e.target.value))}
-          style={styles.slider}
-        />
-      </div>
-
-      <ActionButton onClick={searchSimilarMessages} loading={loading}>
-        🔎 Cerca Messaggi Simili
-      </ActionButton>
-
-      {similarResults && (
-        <ResultBox>
-          <h3 style={styles.resultTitle}>
-            Risultati per: "<em>{similarResults.query}</em>"
-          </h3>
-          {similarResults.similar_messages.length === 0 ? (
-            <p style={styles.noResults}>Nessun risultato trovato</p>
-          ) : (
-            similarResults.similar_messages.map((msg, idx) => (
-              <SimilarMessageCard key={idx} message={msg} />
-            ))
-          )}
-        </ResultBox>
-      )}
-
-      {/* Info Box */}
-      <InfoBox>
-        <strong>💡 Come funziona la ricerca semantica:</strong>
-        <ul style={styles.infoList}>
-          <li>Non cerca keywords esatte</li>
-          <li>Confronta il <em>significato</em> dei testi</li>
-          <li>Query "deadline" → trova anche "finish by Friday"</li>
-          <li>Usa embeddings a 384 dimensioni</li>
-        </ul>
-      </InfoBox>
-    </Card>
-  )
-}
-
-function Footer() {
-  return (
-    <div style={styles.footer}>
-      <div style={styles.footerTitle}>🤖 Microservices Architecture</div>
-      <div style={styles.footerContent}>
-        <span style={styles.footerItem}>
-          <strong>BERT Sentiment</strong> (nlptown) - Port 5001
-        </span>
-        <span style={styles.footerItem}>
-          <strong>E5 Embeddings</strong> (agentlans) - Port 5002
+    <div
+      onClick={onClick}
+      style={{
+        ...styles.sidebarItem,
+        ...(active ? styles.sidebarItemActive : {})
+      }}
+    >
+      <div style={styles.sidebarLabelContainer}>
+        {active && <div style={styles.activeIndicator}></div>}
+        <span style={{...styles.sidebarLabel, fontWeight: active ? '600' : '400'}}>
+          {label}
         </span>
       </div>
-      <div style={styles.footerTech}>
-        Backend: <code>FastAPI Gateway</code> | Frontend: <code>React + Vite</code>
-      </div>
-      <div style={styles.footerLinks}>
-        <a href={`${API_URL}/docs`} target="_blank" style={styles.footerLink}>
-          📚 API Docs
-        </a>
-        {' | '}
-        <a href={`${API_URL}/services/status`} target="_blank" style={styles.footerLink}>
-          🔧 Services Status
-        </a>
-      </div>
+      {badge && <span style={styles.sidebarBadge}>{badge}</span>}
     </div>
   )
 }
 
-// ============================================
-// UI COMPONENTS
-// ============================================
-
-function Card({ children }) {
-  return <div style={styles.card}>{children}</div>
-}
-
-function ResultBox({ children }) {
-  return <div style={styles.resultBox}>{children}</div>
-}
-
-function InfoBox({ children }) {
-  return <div style={styles.infoBox}>{children}</div>
-}
-
-function MetricsGrid({ children }) {
-  return <div style={styles.metricsGrid}>{children}</div>
-}
-
-function MetricCard({ label, value, icon }) {
-  return (
-    <div style={styles.metricCard}>
-      <span style={styles.metricLabel}>
-        {icon} {label}
-      </span>
-      <span style={styles.metricValue}>{value}</span>
-    </div>
-  )
-}
-
-function ParticipantFilter({ participants, selectedParticipant, setSelectedParticipant }) {
-  return (
-    <div style={styles.filterContainer}>
-      <label style={styles.filterLabel}>
-        Filtra per partecipante (opzionale):
-      </label>
-      <select
-        value={selectedParticipant}
-        onChange={(e) => setSelectedParticipant(e.target.value)}
-        style={styles.select}
-      >
-        <option value="">Tutti i partecipanti</option>
-        {participants.map(p => (
-          <option key={p.id} value={p.id}>{p.name}</option>
-        ))}
-      </select>
-    </div>
-  )
-}
-
-function ActionButton({ onClick, loading, children }) {
+function TabButton({ label, active, onClick }) {
   return (
     <button
       onClick={onClick}
-      disabled={loading}
       style={{
-        ...styles.button,
-        ...(loading ? styles.buttonDisabled : {})
+        ...styles.tabButton,
+        ...(active ? styles.tabButtonActive : {})
       }}
     >
-      {loading ? '⏳ Caricamento...' : children}
+      {label}
     </button>
   )
 }
 
-function SentimentDisplay({ result }) {
-  const getEmoji = (sentiment) => {
-    const map = {
-      'very_negative': '😢',
-      'negative': '😕',
-      'neutral': '😐',
-      'positive': '😊',
-      'very_positive': '😁'
-    }
-    return map[sentiment] || '😐'
-  }
-
-  const getColor = (stars) => {
-    if (stars >= 4.5) return '#4caf50'
-    if (stars >= 3.5) return '#8bc34a'
-    if (stars >= 2.5) return '#ff9800'
-    if (stars >= 1.5) return '#ff5722'
-    return '#f44336'
-  }
+function OverviewView({ data }) {
+  const stats = data.metadata.sentiment_stats
 
   return (
-    <div style={styles.sentimentDisplay}>
-      <div style={styles.sentimentEmoji}>{getEmoji(result.sentiment)}</div>
-      <div style={{ ...styles.sentimentStars, color: getColor(result.stars) }}>
-        ⭐ {result.stars}/5.0
+    <div style={styles.viewContainer}>
+      <h3 style={styles.sectionHeader}>KPI Sentiment</h3>
+      
+      <div style={styles.kpiGrid}>
+        <KpiCard label="Average Score" value={stats.average_stars.toFixed(1)} sub="/ 5.0" color="#3b82f6" />
+        <KpiCard label="Positivity Rate" value={(stats.positive_ratio * 100).toFixed(0)} sub="%" color="#10b981" />
+        <KpiCard label="Total Messages" value={stats.total_analyzed} sub="" color="#6366f1" />
       </div>
-      <div style={styles.sentimentLabel}>
-        {result.sentiment.replace('_', ' ')}
+
+      <div style={styles.chartSection}>
+        <h4 style={styles.chartTitle}>Distribuzione Tono</h4>
+        <SentimentBar data={data.transcript} />
+        <div style={styles.chartLegend}>
+          <span>Negative</span>
+          <span>Neutral</span>
+          <span>Positive</span>
+        </div>
       </div>
-      <div style={styles.sentimentConfidence}>
-        Confidenza: {(result.confidence * 100).toFixed(1)}%
+
+      <div style={styles.insightCard}>
+        <div style={styles.insightHeader}>AUTO-INSIGHTS</div>
+        <ul style={styles.insightList}>
+          <li>Il sentiment complessivo è <strong>{stats.average_stars >= 3 ? 'Positivo' : 'Critico'}</strong>.</li>
+          <li>Rilevata predominanza di interventi {stats.positive_ratio > 0.5 ? 'costruttivi' : 'neutri o critici'}.</li>
+        </ul>
       </div>
     </div>
   )
 }
 
-function MessageCard({ entry }) {
-  const getColor = (stars) => {
-    if (stars >= 4.0) return '#e8f5e9'
-    if (stars >= 3.0) return '#fff9e6'
-    return '#ffebee'
-  }
-
-  const getBorderColor = (stars) => {
-    if (stars >= 4.0) return '#4caf50'
-    if (stars >= 3.0) return '#ff9800'
-    return '#f44336'
-  }
-
+function MessagesView({ data }) {
   return (
-    <div style={{
-      ...styles.messageCard,
-      backgroundColor: getColor(entry.sentiment.stars),
-      borderLeft: `4px solid ${getBorderColor(entry.sentiment.stars)}`
-    }}>
-      <div style={styles.messageHeader}>
-        <strong>{entry.nickname}</strong>
-        <span style={styles.messageTime}>{entry.from}</span>
-      </div>
-      <p style={styles.messageText}>"{entry.text}"</p>
-      <div style={styles.messageFooter}>
-        <span>⭐ {entry.sentiment.stars}/5.0</span>
-        <span style={styles.messageSentiment}>
-          {entry.sentiment.sentiment.replace('_', ' ')}
-        </span>
+    <div style={styles.viewContainer}>
+      <h3 style={styles.sectionHeader}>Transcript Log</h3>
+      <div style={styles.messageStream}>
+        {data.transcript.map((entry, idx) => (
+          <MessageBubble key={idx} entry={entry} />
+        ))}
       </div>
     </div>
   )
 }
 
-function SimilarMessageCard({ message }) {
-  const getColor = (score) => {
-    if (score >= 0.8) return '#4caf50'
-    if (score >= 0.6) return '#8bc34a'
-    if (score >= 0.4) return '#ff9800'
-    return '#ff5722'
+function SimilarityView({ data }) {
+  return (
+    <div style={styles.viewContainer}>
+      <h3 style={styles.sectionHeader}>Risultati Semantici</h3>
+      <div style={styles.queryBadge}>Query: {data.query}</div>
+      <div style={styles.resultsStack}>
+        {data.similar_messages.map((msg, idx) => (
+          <SimilarResultRow key={idx} message={msg} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function KpiCard({ label, value, sub, color }) {
+  return (
+    <div style={styles.kpiCard}>
+      <div style={styles.kpiLabel}>{label}</div>
+      <div style={{...styles.kpiValue, color}}>{value}<span style={styles.kpiSub}>{sub}</span></div>
+    </div>
+  )
+}
+
+function SentimentBar({ data }) {
+  const counts = { very_positive: 0, positive: 0, neutral: 0, negative: 0, very_negative: 0 }
+  data.forEach(entry => counts[entry.sentiment.sentiment]++)
+  const total = data.length
+  
+  const colors = {
+    very_positive: '#059669', positive: '#34d399', neutral: '#94a3b8', negative: '#f87171', very_negative: '#dc2626'
   }
 
   return (
-    <div style={{
-      ...styles.similarCard,
-      borderLeft: `4px solid ${getColor(message.similarity)}`
-    }}>
-      <div style={styles.similarHeader}>
-        <div style={{ ...styles.similarRank, color: getColor(message.similarity) }}>
-          #{message.rank}
-        </div>
-        <div style={styles.similarScore}>
-          Similarity: <strong>{(message.similarity * 100).toFixed(1)}%</strong>
+    <div style={styles.barTrack}>
+      {Object.keys(counts).map(key => {
+        const pct = (counts[key] / total) * 100
+        return pct > 0 ? (
+          <div key={key} style={{...styles.barFill, width: `${pct}%`, backgroundColor: colors[key]}} />
+        ) : null
+      })}
+    </div>
+  )
+}
+
+function MessageBubble({ entry }) {
+  const sentimentColor = {
+    'very_positive': '#10b981', 'positive': '#34d399', 'neutral': '#cbd5e1', 'negative': '#f87171', 'very_negative': '#ef4444'
+  }[entry.sentiment.sentiment]
+
+  return (
+    <div style={{...styles.msgBubble, borderLeft: `4px solid ${sentimentColor}`}}>
+      <div style={styles.msgMeta}>
+        <span style={styles.msgAuthor}>{entry.nickname}</span>
+        <span style={styles.msgScore}>{entry.sentiment.stars.toFixed(1)}</span>
+      </div>
+      <p style={styles.msgText}>{entry.text}</p>
+      <div style={styles.msgTime}>{entry.from}</div>
+    </div>
+  )
+}
+
+function SimilarResultRow({ message }) {
+  const opacity = Math.max(0.4, message.similarity); 
+  return (
+    <div style={{...styles.resultRow, opacity}}>
+      <div style={styles.resultRank}>#{message.rank}</div>
+      <div style={styles.resultContent}>
+        <div style={styles.resultText}>"{message.text}"</div>
+        <div style={styles.resultMeta}>
+          <span style={styles.resultMatch}>{(message.similarity * 100).toFixed(0)}% Match</span>
+          <span> • {message.speaker}</span>
         </div>
       </div>
-      <p style={styles.similarText}>"{message.text}"</p>
-      <div style={styles.similarMeta}>
-        👤 {message.speaker} • 🕐 {message.timestamp}
-      </div>
+    </div>
+  )
+}
+
+function FeatureBox({ title, value, icon }) {
+  return (
+    <div style={styles.featureBox}>
+      <div style={styles.fbIcon}>{icon}</div>
+      <div style={styles.fbValue}>{value}</div>
+      <div style={styles.fbTitle}>{title}</div>
     </div>
   )
 }
 
 // ============================================
-// STYLES
+// STYLES SYSTEM
 // ============================================
 
 const styles = {
-  container: {
+  appContainer: {
+    display: 'flex',
     minHeight: '100vh',
-    backgroundColor: '#f5f5f5',
-    fontFamily: 'system-ui, -apple-system, sans-serif',
-    padding: '2rem'
+    backgroundColor: '#f1f5f9', 
+    fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+    color: '#334155'
   },
-  header: {
-    textAlign: 'center',
-    marginBottom: '2rem'
-  },
-  title: {
-    fontSize: '2rem',
-    color: '#333',
-    marginBottom: '0.5rem',
-    fontWeight: '700'
-  },
-  subtitle: {
-    color: '#666',
-    fontSize: '0.95rem'
-  },
-  tabContainer: {
-    display: 'flex',
-    justifyContent: 'center',
-    gap: '1rem',
-    marginBottom: '2rem',
-    flexWrap: 'wrap'
-  },
-  tab: {
-    padding: '0.75rem 1.5rem',
-    fontSize: '0.95rem',
-    fontWeight: '500',
-    color: '#666',
-    backgroundColor: 'white',
-    border: '2px solid #e0e0e0',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    transition: 'all 0.2s'
-  },
-  activeTab: {
-    color: 'white',
-    backgroundColor: '#1976d2',
-    borderColor: '#1976d2',
-    fontWeight: '600'
-  },
-  content: {
-    maxWidth: '1200px',
-    margin: '0 auto'
-  },
-  error: {
-    marginBottom: '1rem',
-    padding: '1rem',
-    backgroundColor: '#fee',
-    border: '1px solid #fcc',
-    borderRadius: '6px',
-    color: '#c33',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center'
-  },
-  errorClose: {
-    background: 'none',
-    border: 'none',
-    fontSize: '1.2rem',
-    cursor: 'pointer',
-    color: '#c33'
-  },
-  tabGrid: {
-    display: 'grid',
-    gap: '1.5rem',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(500px, 1fr))'
-  },
-  card: {
-    backgroundColor: 'white',
-    borderRadius: '12px',
-    boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
-    padding: '2rem'
-  },
-  cardTitle: {
-    fontSize: '1.5rem',
-    marginBottom: '0.5rem',
-    color: '#333'
-  },
-  cardDescription: {
-    color: '#666',
-    fontSize: '0.9rem',
-    marginBottom: '1.5rem',
-    lineHeight: '1.5'
-  },
-  textarea: {
-    width: '100%',
-    minHeight: '100px',
-    padding: '0.75rem',
-    fontSize: '1rem',
-    borderRadius: '6px',
-    border: '1px solid #ddd',
-    marginBottom: '1rem',
-    fontFamily: 'inherit',
-    resize: 'vertical'
-  },
-  textareaSmall: {
-    width: '100%',
-    minHeight: '80px',
-    padding: '0.75rem',
-    fontSize: '1rem',
-    borderRadius: '6px',
-    border: '1px solid #ddd',
-    marginBottom: '1rem',
-    fontFamily: 'inherit',
-    resize: 'vertical'
-  },
-  filterContainer: {
-    marginBottom: '1.5rem'
-  },
-  filterLabel: {
-    display: 'block',
-    marginBottom: '0.5rem',
-    fontSize: '0.9rem',
-    fontWeight: '500',
-    color: '#666'
-  },
-  select: {
-    width: '100%',
-    padding: '0.75rem',
-    fontSize: '1rem',
-    borderRadius: '6px',
-    border: '1px solid #ddd',
-    backgroundColor: 'white'
-  },
-  button: {
-    width: '100%',
-    padding: '1rem',
-    fontSize: '1rem',
-    fontWeight: '600',
-    color: 'white',
-    backgroundColor: '#1976d2',
-    border: 'none',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    transition: 'background-color 0.2s'
-  },
-  buttonDisabled: {
-    backgroundColor: '#ccc',
-    cursor: 'not-allowed'
-  },
-  resultBox: {
-    marginTop: '1.5rem',
-    padding: '1.5rem',
-    backgroundColor: '#e3f2fd',
-    borderRadius: '8px',
-    border: '2px solid #1976d2'
-  },
-  resultTitle: {
-    margin: '0 0 1rem 0',
-    fontSize: '1.25rem',
-    color: '#1976d2'
-  },
-  metricsGrid: {
-    display: 'grid',
-    gap: '1rem',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))'
-  },
-  metricCard: {
+
+  // SIDEBAR (Dark Theme)
+  sidebar: {
+    width: '280px',
+    backgroundColor: '#0f172a', 
     display: 'flex',
     flexDirection: 'column',
-    gap: '0.5rem',
-    padding: '1rem',
-    backgroundColor: 'white',
-    borderRadius: '6px'
+    position: 'fixed',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    zIndex: 50,
+    color: '#94a3b8'
   },
-  metricLabel: {
-    color: '#666',
+  sidebarHeader: {
+    padding: '2rem 1.5rem',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '1rem',
+    borderBottom: '1px solid #1e293b'
+  },
+  logoCircle: {
+    width: '32px',
+    height: '32px',
+    backgroundColor: '#3b82f6',
+    borderRadius: '8px',
+    color: 'white',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontWeight: 'bold',
     fontSize: '0.9rem'
   },
-  metricValue: {
-    fontSize: '1.75rem',
-    fontWeight: 'bold',
-    color: '#1976d2'
+  logoText: {
+    color: '#f8fafc',
+    fontSize: '0.75rem',
+    fontWeight: '700',
+    letterSpacing: '1px',
+    lineHeight: '1.2'
   },
-  sentimentDisplay: {
-    textAlign: 'center'
-  },
-  sentimentEmoji: {
-    fontSize: '4rem',
-    marginBottom: '1rem'
-  },
-  sentimentStars: {
-    fontSize: '2.5rem',
-    fontWeight: 'bold',
-    marginBottom: '0.5rem'
-  },
-  sentimentLabel: {
-    fontSize: '1.2rem',
-    color: '#666',
-    textTransform: 'capitalize',
-    marginBottom: '1rem'
-  },
-  sentimentConfidence: {
-    fontSize: '0.9rem',
-    color: '#999'
-  },
-  scrollContainer: {
-    maxHeight: '400px',
-    overflowY: 'auto'
-  },
-  sectionTitle: {
-    fontSize: '1.1rem',
-    marginBottom: '1rem',
-    color: '#333'
-  },
-  messageCard: {
-    padding: '1rem',
-    marginBottom: '0.75rem',
-    borderRadius: '8px'
-  },
-  messageHeader: {
+  sidebarNav: {
+    padding: '1.5rem 1rem',
+    flex: 1,
     display: 'flex',
-    justifyContent: 'space-between',
-    marginBottom: '0.5rem'
+    flexDirection: 'column',
+    gap: '0.25rem'
   },
-  messageTime: {
-    fontSize: '0.85rem',
-    color: '#666'
-  },
-  messageText: {
-    margin: '0.5rem 0',
-    color: '#333'
-  },
-  messageFooter: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    fontSize: '0.85rem',
-    color: '#666'
-  },
-  messageSentiment: {
-    textTransform: 'capitalize'
-  },
-  sliderContainer: {
-    marginBottom: '1.5rem'
-  },
-  sliderLabel: {
-    display: 'block',
-    marginBottom: '0.5rem',
-    fontSize: '0.9rem',
-    color: '#666'
-  },
-  slider: {
-    width: '100%'
-  },
-  similarCard: {
-    padding: '1rem',
-    marginBottom: '0.75rem',
-    backgroundColor: 'white',
-    borderRadius: '6px'
-  },
-  similarHeader: {
+  sidebarItem: {
+    padding: '0.75rem 1rem',
+    borderRadius: '6px',
+    cursor: 'pointer',
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: '0.5rem'
-  },
-  similarRank: {
-    fontSize: '1.5rem',
-    fontWeight: 'bold'
-  },
-  similarScore: {
-    fontSize: '0.9rem',
-    color: '#666'
-  },
-  similarText: {
-    margin: '0.5rem 0',
-    color: '#333'
-  },
-  similarMeta: {
-    fontSize: '0.85rem',
-    color: '#999'
-  },
-  infoBox: {
-    marginTop: '1.5rem',
-    padding: '1rem',
-    backgroundColor: '#f9f9f9',
-    borderRadius: '6px',
-    fontSize: '0.85rem',
-    color: '#666',
-    lineHeight: '1.6'
-  },
-  infoList: {
-    margin: '0.5rem 0 0 0',
-    paddingLeft: '1.5rem'
-  },
-  noResults: {
-    textAlign: 'center',
-    color: '#999',
-    padding: '2rem'
-  },
-  footer: {
-    marginTop: '3rem',
-    padding: '1.5rem',
-    textAlign: 'center',
-    fontSize: '0.85rem',
-    color: '#666',
-    backgroundColor: 'white',
-    borderRadius: '8px'
-  },
-  footerTitle: {
-    marginBottom: '0.5rem',
-    fontWeight: '600'
-  },
-  footerContent: {
-    marginBottom: '1rem',
-    display: 'flex',
-    justifyContent: 'center',
-    gap: '2rem',
-    flexWrap: 'wrap'
-  },
-  footerItem: {
+    transition: 'all 0.2s ease',
     fontSize: '0.9rem'
   },
-  footerTech: {
+  sidebarItemActive: {
+    backgroundColor: '#1e293b',
+    color: '#f8fafc'
+  },
+  sidebarLabelContainer: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.75rem'
+  },
+  activeIndicator: {
+    width: '6px',
+    height: '6px',
+    borderRadius: '50%',
+    backgroundColor: '#3b82f6',
+    boxShadow: '0 0 8px #3b82f6'
+  },
+  sidebarBadge: {
+    fontSize: '0.65rem',
+    backgroundColor: '#3b82f6',
+    color: 'white',
+    padding: '2px 8px',
+    borderRadius: '12px',
+    fontWeight: '600'
+  },
+  sidebarFooter: {
+    padding: '1.5rem',
+    borderTop: '1px solid #1e293b'
+  },
+  userProfile: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.75rem'
+  },
+  userAvatar: {
+    width: '36px',
+    height: '36px',
+    borderRadius: '50%',
+    backgroundColor: '#334155',
+    color: '#cbd5e1',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
     fontSize: '0.8rem',
-    marginBottom: '0.5rem'
+    fontWeight: '600'
   },
-  footerLinks: {
-    marginTop: '0.5rem'
+  userInfo: {
+    display: 'flex',
+    flexDirection: 'column'
   },
-  footerLink: {
-    color: '#1976d2',
-    textDecoration: 'none'
-  }
+  userName: { color: '#f8fafc', fontSize: '0.85rem', fontWeight: '500' },
+  userRole: { fontSize: '0.7rem', color: '#64748b' },
+
+  // PANEL (Slide-out)
+  panel: {
+    width: '400px', 
+    backgroundColor: 'white',
+    boxShadow: '-4px 0 24px rgba(0,0,0,0.08)',
+    display: 'flex',
+    flexDirection: 'column',
+    position: 'fixed',
+    left: '280px',
+    top: 0,
+    bottom: 0,
+    zIndex: 40,
+    borderRight: '1px solid #e2e8f0'
+  },
+  panelHeader: {
+    padding: '1.5rem',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    borderBottom: '1px solid #f1f5f9'
+  },
+  panelTitle: { fontSize: '1.1rem', fontWeight: '700', color: '#1e293b', margin: 0 },
+  panelSubtitle: { fontSize: '0.75rem', color: '#94a3b8', marginTop: '4px', display: 'block' },
+  panelClose: {
+    background: 'none', border: 'none', color: '#cbd5e1', fontSize: '1.2rem', cursor: 'pointer'
+  },
+
+  // SEARCH & TABS
+  searchContainer: { padding: '1rem 1.5rem', borderBottom: '1px solid #f1f5f9' },
+  searchInput: {
+    width: '100%', boxSizing: 'border-box', padding: '0.75rem 1rem', fontSize: '0.9rem',
+    border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none',
+    backgroundColor: '#f8fafc', transition: 'all 0.2s',
+    boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.02)'
+  },
+  tabContainer: {
+    display: 'flex', padding: '0.5rem 1.5rem 0', gap: '1.5rem', borderBottom: '1px solid #e2e8f0'
+  },
+  tabButton: {
+    padding: '0.75rem 0', fontSize: '0.85rem', fontWeight: '500', color: '#64748b',
+    border: 'none', background: 'none', cursor: 'pointer', borderBottom: '2px solid transparent',
+    transition: 'color 0.2s'
+  },
+  tabButtonActive: { color: '#3b82f6', borderBottom: '2px solid #3b82f6' },
+
+  // CONTENT AREA
+  panelContent: { flex: 1, overflowY: 'auto', padding: '1.5rem' },
+  
+  viewContainer: { display: 'flex', flexDirection: 'column', gap: '1.5rem' },
+  sectionHeader: { 
+    fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', 
+    color: '#94a3b8', fontWeight: '600', marginBottom: '0.5rem' 
+  },
+
+  // KPI CARDS
+  kpiGrid: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem' },
+  kpiCard: {
+    padding: '1rem', backgroundColor: 'white', borderRadius: '8px',
+    border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+    textAlign: 'center'
+  },
+  kpiLabel: { fontSize: '0.7rem', color: '#64748b', marginBottom: '0.25rem' },
+  kpiValue: { fontSize: '1.25rem', fontWeight: '700', lineHeight: '1' },
+  kpiSub: { fontSize: '0.7rem', fontWeight: '400', opacity: 0.7 },
+
+  // CHARTS
+  chartSection: { padding: '1rem', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' },
+  chartTitle: { fontSize: '0.8rem', fontWeight: '600', marginBottom: '0.75rem', color: '#475569' },
+  barTrack: { display: 'flex', height: '12px', borderRadius: '6px', overflow: 'hidden', backgroundColor: '#e2e8f0' },
+  barFill: { height: '100%' },
+  chartLegend: { display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: '#94a3b8', marginTop: '0.5rem' },
+
+  // INSIGHTS
+  insightCard: {
+    padding: '1rem', backgroundColor: '#eff6ff', border: '1px solid #dbeafe', borderRadius: '8px'
+  },
+  insightHeader: { fontSize: '0.7rem', color: '#3b82f6', fontWeight: '700', marginBottom: '0.5rem', letterSpacing: '0.5px' },
+  insightList: { margin: 0, paddingLeft: '1rem', fontSize: '0.85rem', color: '#334155', lineHeight: '1.5' },
+
+  // MESSAGES
+  messageStream: { display: 'flex', flexDirection: 'column', gap: '1rem' },
+  msgBubble: {
+    padding: '1rem', backgroundColor: 'white', borderRadius: '0 8px 8px 0',
+    border: '1px solid #e2e8f0', borderLeftWidth: '4px',
+    boxShadow: '0 1px 2px rgba(0,0,0,0.02)'
+  },
+  msgMeta: { display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' },
+  msgAuthor: { fontSize: '0.8rem', fontWeight: '700', color: '#1e293b' },
+  msgScore: { fontSize: '0.7rem', color: '#94a3b8', backgroundColor: '#f1f5f9', padding: '1px 6px', borderRadius: '4px' },
+  msgText: { fontSize: '0.9rem', lineHeight: '1.5', color: '#475569', margin: 0 },
+  msgTime: { fontSize: '0.7rem', color: '#cbd5e1', marginTop: '0.5rem', textAlign: 'right' },
+
+  // SEARCH RESULTS
+  queryBadge: { 
+    display: 'inline-block', fontSize: '0.75rem', color: '#3b82f6', backgroundColor: '#eff6ff', 
+    padding: '4px 8px', borderRadius: '4px', marginBottom: '1rem', border: '1px solid #dbeafe' 
+  },
+  resultsStack: { display: 'flex', flexDirection: 'column', gap: '0.5rem' },
+  resultRow: { 
+    display: 'flex', gap: '0.75rem', padding: '0.75rem', backgroundColor: 'white', 
+    border: '1px solid #e2e8f0', borderRadius: '6px' 
+  },
+  resultRank: { fontSize: '0.8rem', fontWeight: '700', color: '#cbd5e1' },
+  resultContent: { flex: 1 },
+  resultText: { fontSize: '0.85rem', color: '#334155', marginBottom: '0.25rem', fontStyle: 'italic' },
+  resultMatch: { color: '#10b981', fontWeight: '600' },
+  resultMeta: { fontSize: '0.7rem', color: '#94a3b8' },
+
+  // MAIN LAYOUT & HERO
+  mainContent: { flex: 1, transition: 'margin-left 0.3s ease', backgroundColor: '#f1f5f9' },
+  topNav: { 
+    height: '60px', borderBottom: '1px solid #e2e8f0', backgroundColor: 'white', 
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 2rem' 
+  },
+  breadcrumb: { fontSize: '0.85rem', color: '#64748b' },
+  statusBadge: { fontSize: '0.75rem', color: '#10b981', fontWeight: '600', backgroundColor: '#ecfdf5', padding: '4px 8px', borderRadius: '12px' },
+  contentWrapper: { padding: '2rem 3rem', maxWidth: '1200px', margin: '0 auto' },
+  heroSection: { marginBottom: '2.5rem' },
+  pageTitle: { fontSize: '1.8rem', fontWeight: '800', color: '#0f172a', margin: '0 0 0.5rem 0', letterSpacing: '-0.02em' },
+  pageSubtitle: { fontSize: '1rem', color: '#64748b' },
+  
+  mainCard: { 
+    backgroundColor: 'white', borderRadius: '12px', 
+    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)',
+    border: '1px solid #e2e8f0'
+  },
+  cardHeaderBorder: { padding: '1.5rem 2rem', borderBottom: '1px solid #f1f5f9' },
+  cardTitle: { fontSize: '1.1rem', fontWeight: '600', color: '#1e293b', margin: 0 },
+  cardBody: { padding: '2rem' },
+  
+  statsRow: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '2rem', marginTop: '2rem' },
+  featureBox: { padding: '1.5rem', backgroundColor: '#f8fafc', borderRadius: '8px', textAlign: 'center', border: '1px solid #e2e8f0' },
+  fbIcon: { fontSize: '1.5rem', marginBottom: '0.5rem', filter: 'grayscale(100%) opacity(0.7)' }, // Icone desaturate per stile formale
+  fbValue: { fontSize: '1.8rem', fontWeight: '700', color: '#3b82f6', marginBottom: '0.25rem', lineHeight: '1.2' },
+  fbTitle: { fontSize: '0.7rem', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' },
+
+  // UTILS
+  errorBanner: { padding: '1rem', backgroundColor: '#fef2f2', border: '1px solid #fee2e2', borderRadius: '6px', color: '#991b1b', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.5rem' },
+  errorDot: { width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#ef4444' },
+  loadingContainer: { padding: '3rem', textAlign: 'center', color: '#64748b', fontSize: '0.85rem' },
+  loaderLine: { width: '40px', height: '4px', backgroundColor: '#3b82f6', margin: '0 auto 1rem auto', borderRadius: '2px' }
 }
 
 export default App
