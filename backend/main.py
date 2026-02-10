@@ -158,16 +158,6 @@ for meeting_config in MEETINGS_CONFIG:
 async def call_bert_service(endpoint: str, payload: dict) -> dict:
     """
     Chiama il servizio BERT per sentiment analysis
-    
-    Args:
-        endpoint: L'endpoint da chiamare (es: "analyze", "batch")
-        payload: Dati da inviare
-        
-    Returns:
-        Risposta JSON dal servizio BERT
-        
-    Raises:
-        HTTPException: Se il servizio non è disponibile
     """
     try:
         response = await http_client.post(
@@ -191,16 +181,6 @@ async def call_bert_service(endpoint: str, payload: dict) -> dict:
 async def call_e5_service(endpoint: str, payload: dict) -> dict:
     """
     Chiama il servizio E5 per embeddings/similarity
-    
-    Args:
-        endpoint: L'endpoint da chiamare (es: "embed", "similarity")
-        payload: Dati da inviare
-        
-    Returns:
-        Risposta JSON dal servizio E5
-        
-    Raises:
-        HTTPException: Se il servizio non è disponibile
     """
     try:
         response = await http_client.post(
@@ -262,8 +242,7 @@ async def root():
         "endpoints": {
             "original": [
                 "GET /meeting/{meetingId}",
-                "GET /meeting/{meetingId}/transcript/",
-                "GET /meeting/{meetingId}/character-count"
+                "GET /meeting/{meetingId}/transcript/"
             ],
             "sentiment": [
                 "POST /sentiment/analyze",
@@ -346,41 +325,6 @@ def get_transcript_filtered(
         "metadata": {"language": "en"}
     }
 
-@app.get("/meeting/{meetingId}/character-count")
-def get_character_count(
-    meetingId: str,
-    participant_id: Optional[str] = None
-):
-    """
-    Conta caratteri, parole e messaggi nel transcript
-    
-    Query params:
-    - participant_id: filtra per partecipante (opzionale)
-    """
-    response = get_transcript_filtered(meetingId, participant_id)
-    transcript = response["transcript"]
-    
-    total_chars = sum(len(entry.text) for entry in transcript)
-    total_words = sum(len(entry.text.split()) for entry in transcript)
-    
-    result = {
-        "meeting_id": meetingId,
-        "total_characters": total_chars,
-        "total_words": total_words,
-        "total_messages": len(transcript)
-    }
-    
-    # Aggiungi info partecipante se filtrato
-    if participant_id:
-        participant = next((p for p in PARTICIPANTS if p.id == participant_id), None)
-        if participant:
-            result["participant"] = {
-                "id": participant_id,
-                "name": participant.name
-            }
-    
-    return result
-
 # ============================================
 # SENTIMENT ANALYSIS ENDPOINTS (NUOVI)
 # Orchestrano chiamate a BERT microservice
@@ -390,21 +334,6 @@ def get_character_count(
 async def analyze_sentiment(request: SentimentAnalysisRequest):
     """
     Analizza sentiment di un singolo testo tramite BERT microservice
-    
-    Body:
-        - text: Testo da analizzare
-    
-    Returns:
-        - stars: float 1.0-5.0
-        - sentiment: str (very_negative, negative, neutral, positive, very_positive)
-        - confidence: float 0.0-1.0
-    
-    Example:
-        POST /sentiment/analyze
-        {"text": "This meeting was very productive!"}
-        
-        Response:
-        {"stars": 4.8, "sentiment": "very_positive", "confidence": 0.92}
     """
     result = await call_bert_service("analyze", {"text": request.text})
     return result
@@ -413,15 +342,6 @@ async def analyze_sentiment(request: SentimentAnalysisRequest):
 async def analyze_sentiment_batch(request: BatchSentimentRequest):
     """
     Analizza sentiment per batch di testi tramite BERT microservice
-    
-    Più efficiente di chiamate singole (~10x faster)
-    
-    Body:
-        - texts: Lista di testi (max 100)
-    
-    Example:
-        POST /sentiment/batch
-        {"texts": ["Great work!", "This is terrible", "Not sure"]}
     """
     result = await call_bert_service("batch", {"texts": request.texts})
     return result
@@ -437,50 +357,6 @@ async def get_transcript_with_sentiment(
 ):
     """
     Ottieni transcript arricchito con sentiment analysis
-    
-    Query params:
-    - participant_id: filtra per partecipante (opzionale)
-    - include_embeddings: se True, include anche embeddings E5
-    
-    Workflow:
-    1. Ottieni transcript dal database
-    2. Filtra per partecipante (se richiesto)
-    3. Chiama BERT microservice per sentiment (batch)
-    4. Opzionalmente chiama E5 microservice per embeddings
-    5. Combina risultati e calcola statistiche
-    
-    Returns:
-        - transcript: Lista messaggi con sentiment
-        - metadata: Stats aggregate (avg_stars, positive_ratio, etc.)
-    
-    Example:
-        GET /meeting/mtg001/sentiment
-        
-        Response:
-        {
-          "transcript": [
-            {
-              "uid": "12345",
-              "nickname": "Alice",
-              "text": "Great meeting!",
-              "from": "00:00:01.000",
-              "to": "00:00:05.000",
-              "sentiment": {
-                "stars": 4.5,
-                "sentiment": "very_positive",
-                "confidence": 0.89
-              }
-            }
-          ],
-          "metadata": {
-            "language": "en",
-            "sentiment_stats": {
-              "average_stars": 3.8,
-              "positive_ratio": 0.65,
-              "total_analyzed": 20
-            }
-          }
-        }
     """
     # 1. Ottieni meeting
     meeting = MOCK_MEETINGS.get(meetingId)
@@ -574,45 +450,6 @@ async def find_similar_messages(
 ):
     """
     Trova messaggi semanticamente simili usando E5 microservice
-    
-    Non cerca keywords esatte, ma significato semantico!
-    
-    Body:
-        - query: Testo di ricerca
-        - top_k: Numero di risultati (default: 5, max: 20)
-    
-    Workflow:
-    1. Ottieni tutti i messaggi del transcript
-    2. Chiama E5 microservice per similarity search
-    3. Arricchisci risultati con metadata (speaker, timestamp)
-    
-    Example:
-        POST /meeting/mtg001/similarity
-        {
-          "query": "We need to make a decision",
-          "top_k": 3
-        }
-        
-        Response:
-        {
-          "query": "We need to make a decision",
-          "similar_messages": [
-            {
-              "text": "We need to make a decision on this by the end of the week.",
-              "similarity": 0.92,
-              "rank": 1,
-              "speaker": "Alice",
-              "timestamp": "00:02:15.000"
-            },
-            {
-              "text": "I think we should move forward with this approach.",
-              "similarity": 0.85,
-              "rank": 2,
-              "speaker": "Bob",
-              "timestamp": "00:05:30.000"
-            }
-          ]
-        }
     """
     # 1. Ottieni meeting
     meeting = MOCK_MEETINGS.get(meetingId)
@@ -689,8 +526,6 @@ def get_all_meetings():
 async def get_services_status():
     """
     Status dettagliato di tutti i microservizi
-    
-    Verifica health e ottiene info da ogni servizio
     """
     # Check health
     bert_healthy = await check_service_health(BERT_SERVICE_URL)

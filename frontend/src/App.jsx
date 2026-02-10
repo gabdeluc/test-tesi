@@ -8,12 +8,11 @@ function App() {
   // ============================================
   
   // UI State
-  const [activeTab, setActiveTab] = useState('counter')
+  const [activeTab, setActiveTab] = useState('sentiment') // Default: sentiment
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   
-  // Character Counter State
-  const [characterCount, setCharacterCount] = useState(null)
+  // Shared State
   const [participants, setParticipants] = useState([])
   const [selectedParticipant, setSelectedParticipant] = useState('')
   
@@ -46,29 +45,6 @@ function App() {
       setParticipants(data.participants)
     } catch (err) {
       console.error('Errore caricamento partecipanti:', err)
-    }
-  }
-
-  const countCharacters = async () => {
-    setLoading(true)
-    setError(null)
-    
-    try {
-      let url = `${API_URL}/meeting/mtg001/character-count`
-      if (selectedParticipant) {
-        url += `?participant_id=${selectedParticipant}`
-      }
-      
-      const response = await fetch(url)
-      if (!response.ok) throw new Error(`HTTP ${response.status}`)
-      
-      const data = await response.json()
-      setCharacterCount(data)
-    } catch (err) {
-      setError(err.message)
-      setCharacterCount(null)
-    } finally {
-      setLoading(false)
     }
   }
 
@@ -175,17 +151,6 @@ function App() {
         {error && <ErrorMessage message={error} onClose={() => setError(null)} />}
 
         {/* Tab Content */}
-        {activeTab === 'counter' && (
-          <CharacterCounterTab
-            participants={participants}
-            selectedParticipant={selectedParticipant}
-            setSelectedParticipant={setSelectedParticipant}
-            loading={loading}
-            countCharacters={countCharacters}
-            characterCount={characterCount}
-          />
-        )}
-
         {activeTab === 'sentiment' && (
           <SentimentTab
             sentimentText={sentimentText}
@@ -229,7 +194,7 @@ function Header() {
     <div style={styles.header}>
       <h1 style={styles.title}>🤖 AI-Powered Meeting Analytics</h1>
       <p style={styles.subtitle}>
-        Sentiment Analysis + Semantic Search con BERT & E5 (Microservices)
+        Sentiment Analysis + Semantic Search con BERT & E5
       </p>
     </div>
   )
@@ -237,9 +202,8 @@ function Header() {
 
 function TabNavigation({ activeTab, setActiveTab }) {
   const tabs = [
-    { id: 'counter', label: '📊 Character Counter', icon: '📊' },
-    { id: 'sentiment', label: '😊 Sentiment Analysis', icon: '😊' },
-    { id: 'similarity', label: '🔍 Similarity Search', icon: '🔍' }
+    { id: 'sentiment', label: 'Sentiment Analysis', icon: '😊' },
+    { id: 'similarity', label: 'Similarity Search', icon: '🔍' }
   ]
 
   return (
@@ -273,59 +237,6 @@ function ErrorMessage({ message, onClose }) {
 // TAB COMPONENTS
 // ============================================
 
-function CharacterCounterTab({ 
-  participants, 
-  selectedParticipant, 
-  setSelectedParticipant,
-  loading, 
-  countCharacters, 
-  characterCount 
-}) {
-  return (
-    <Card>
-      <h2 style={styles.cardTitle}>📊 Conteggio Caratteri Transcript</h2>
-      
-      <ParticipantFilter
-        participants={participants}
-        selectedParticipant={selectedParticipant}
-        setSelectedParticipant={setSelectedParticipant}
-      />
-
-      <ActionButton onClick={countCharacters} loading={loading}>
-        Conta Caratteri
-      </ActionButton>
-
-      {characterCount && (
-        <ResultBox>
-          <h3 style={styles.resultTitle}>Risultato</h3>
-          {characterCount.participant && (
-            <InfoBadge>
-              📌 Partecipante: <strong>{characterCount.participant.name}</strong>
-            </InfoBadge>
-          )}
-          <MetricsGrid>
-            <MetricCard 
-              label="Totale Caratteri" 
-              value={characterCount.total_characters.toLocaleString()} 
-              icon="🔤"
-            />
-            <MetricCard 
-              label="Totale Parole" 
-              value={characterCount.total_words.toLocaleString()} 
-              icon="📝"
-            />
-            <MetricCard 
-              label="Totale Messaggi" 
-              value={characterCount.total_messages} 
-              icon="💬"
-            />
-          </MetricsGrid>
-        </ResultBox>
-      )}
-    </Card>
-  )
-}
-
 function SentimentTab({
   sentimentText, 
   setSentimentText, 
@@ -344,7 +255,7 @@ function SentimentTab({
       <Card>
         <h2 style={styles.cardTitle}>😊 Analizza Sentiment Testo</h2>
         <p style={styles.cardDescription}>
-          Usa <strong>BERT microservice</strong> (port 5001) per classificare sentiment 1-5 stelle
+          Usa <strong>BERT microservice</strong> per classificare sentiment 1-5 stelle
         </p>
         
         <textarea
@@ -369,7 +280,7 @@ function SentimentTab({
       <Card>
         <h2 style={styles.cardTitle}>📊 Sentiment Analysis Transcript</h2>
         <p style={styles.cardDescription}>
-          Analizza sentiment di tutti i messaggi del meeting tramite <strong>batch API</strong>
+          Analizza sentiment di tutti i messaggi del meeting
         </p>
 
         <ParticipantFilter
@@ -433,7 +344,7 @@ function SimilarityTab({
     <Card>
       <h2 style={styles.cardTitle}>🔍 Ricerca Semantica con E5</h2>
       <p style={styles.cardDescription}>
-        Usa <strong>E5 microservice</strong> (port 5002) per trovare messaggi simili per significato
+        Usa <strong>E5 microservice</strong> per trovare messaggi simili per significato
       </p>
 
       <textarea
@@ -493,7 +404,7 @@ function SimilarityTab({
 function Footer() {
   return (
     <div style={styles.footer}>
-      <div style={styles.footerTitle}>🤖 Powered by:</div>
+      <div style={styles.footerTitle}>🤖 Microservices Architecture</div>
       <div style={styles.footerContent}>
         <span style={styles.footerItem}>
           <strong>BERT Sentiment</strong> (nlptown) - Port 5001
@@ -532,10 +443,6 @@ function ResultBox({ children }) {
 
 function InfoBox({ children }) {
   return <div style={styles.infoBox}>{children}</div>
-}
-
-function InfoBadge({ children }) {
-  return <div style={styles.infoBadge}>{children}</div>
 }
 
 function MetricsGrid({ children }) {
@@ -847,14 +754,6 @@ const styles = {
     margin: '0 0 1rem 0',
     fontSize: '1.25rem',
     color: '#1976d2'
-  },
-  infoBadge: {
-    marginBottom: '1rem',
-    padding: '0.75rem',
-    backgroundColor: 'white',
-    borderRadius: '6px',
-    fontSize: '0.9rem',
-    color: '#666'
   },
   metricsGrid: {
     display: 'grid',
