@@ -14,10 +14,10 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - BERT_SERVICE_URL=http://bert-sentiment:5001
-      - TOXICITY_SERVICE_URL=http://toxicity-detection:5002
+      - E5_SERVICE_URL=http://e5-embeddings:5002
     depends_on:
       - bert-sentiment
-      - toxicity-detection
+      - e5-embeddings
     restart: unless-stopped
     networks:
       - ml-network
@@ -45,26 +45,26 @@ services:
           memory: 2G
 
   # ============================================
-  # TOXICITY DETECTION MICROSERVICE
+  # E5 EMBEDDINGS MICROSERVICE
   # ============================================
-  toxicity-detection:
-    build: ./services/toxicity-detection
-    container_name: toxicity-detection-service
+  e5-embeddings:
+    build: ./services/e5-embeddings
+    container_name: e5-embeddings-service
     ports:
       - "5002:5002"
     volumes:
-      - toxicity-model-cache:/app/.cache
+      - e5-model-cache:/app/.cache
     environment:
       - PYTHONUNBUFFERED=1
       - TRANSFORMERS_CACHE=/app/.cache/transformers
-      - MODEL_NAME=gravitee-io/bert-small-toxicity
+      - MODEL_NAME=agentlans/multilingual-e5-small-aligned-sentiment
     restart: unless-stopped
     networks:
       - ml-network
     deploy:
       resources:
         limits:
-          memory: 1G
+          memory: 1.5G
 
   # ============================================
   # FRONTEND
@@ -90,5 +90,5 @@ networks:
 volumes:
   bert-model-cache:
     driver: local
-  toxicity-model-cache:
+  e5-model-cache:
     driver: local
