@@ -41,6 +41,20 @@ sample_phrases:
   - "Does anyone know why the server crashed?"
   - "What happens if we miss the target?"
 
+  # --- Toxicity: Alta (per testing) ---
+  - "You are completely useless and incompetent!"
+  - "This is the stupidest idea I've ever heard."
+  - "Shut up! Nobody asked for your opinion."
+  - "You're an idiot if you believe that."
+  - "I hate working with these morons."
+  
+  # --- Toxicity: Bassa (per testing) ---
+  - "I respectfully disagree with this approach."
+  - "Perhaps we could consider alternative solutions."
+  - "Thank you for sharing your perspective."
+  - "Let's collaborate on finding the best path forward."
+  - "I appreciate everyone's input on this matter."
+
 # Partecipanti predefiniti
 participants:
   - id: "fj93829"

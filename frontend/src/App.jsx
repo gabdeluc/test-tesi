@@ -2,710 +2,1205 @@ import { useState, useEffect } from 'react'
 
 const API_URL = 'http://localhost:8000'
 
+// ============================================
+// CORPORATE FORMAL WIDGET BOARD
+// ============================================
+
 function App() {
-  // ============================================
-  // STATE MANAGEMENT
-  // ============================================
-  
-  const [isPanelOpen, setIsPanelOpen] = useState(false)
-  const [activeView, setActiveView] = useState('overview')
+  const [meetingData, setMeetingData] = useState(null)
+  const [participants, setParticipants] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
-  const [transcriptSentiment, setTranscriptSentiment] = useState(null)
-  const [similarResults, setSimilarResults] = useState(null)
-  const [searchQuery, setSearchQuery] = useState('')
 
-  // ============================================
-  // LOGICA CALCOLO DATI (MESSAGGI, PARTECIPANTI, DURATA)
-  // ============================================
+  // Configurazione widget (con impostazioni avanzate)
+  const [widgetConfigs, setWidgetConfigs] = useState({
+    kpiMessages: { participant: null, showBorder: true },
+    kpiSentiment: { participant: null, showBorder: true },
+    kpiToxicity: { participant: null, showBorder: true },
+    sentimentChart: { participant: null, showLabels: true, showLegend: true },
+    toxicityGauge: { participant: null, showDetails: true },
+    messageStream: { participant: null, limit: 10, showTimestamps: true, compact: false },
+    alerts: { participant: null, threshold: 2.0, toxicityThreshold: 0.7 }
+  })
 
-  // Calcoliamo i dati per la dashboard principale solo se transcriptSentiment esiste
-  const dashboardStats = transcriptSentiment ? {
-    messages: transcriptSentiment.transcript.length,
-    participants: new Set(transcriptSentiment.transcript.map(t => t.nickname)).size,
-    // Prendiamo il timestamp dell'ultimo messaggio come durata approssimativa
-    duration: transcriptSentiment.transcript.length > 0 
-      ? transcriptSentiment.transcript[transcriptSentiment.transcript.length - 1].from 
-      : "00:00",
-    // Stima grezza dei token (caratteri / 4 è una media standard per l'inglese/italiano)
-    tokens: Math.round(transcriptSentiment.transcript.reduce((acc, curr) => acc + curr.text.length, 0) / 4)
-  } : {
-    messages: '-',
-    participants: '-',
-    duration: '-',
-    tokens: '-'
-  }
+  // Widget settings aperto
+  const [openSettings, setOpenSettings] = useState(null)
 
-  // ============================================
-  // EFFECTS
-  // ============================================
-  
   useEffect(() => {
-    if (isPanelOpen && !transcriptSentiment && !loading) {
-      loadTranscriptSentiment()
-    }
-  }, [isPanelOpen])
+    loadInitialData()
+  }, [])
 
-  // ============================================
-  // API CALLS
-  // ============================================
-  
-  const loadTranscriptSentiment = async () => {
+  const loadInitialData = async () => {
     setLoading(true)
-    setError(null)
-    
     try {
-      const response = await fetch(`${API_URL}/meeting/mtg001/sentiment?include_embeddings=false`)
+      const respPart = await fetch(`${API_URL}/participants`)
+      const dataPart = await respPart.json()
+      setParticipants(dataPart.participants)
+
+      const response = await fetch(`${API_URL}/meeting/mtg001/analysis`)
       if (!response.ok) throw new Error(`Status ${response.status}`)
       const data = await response.json()
-      setTranscriptSentiment(data)
+      setMeetingData(data)
     } catch (err) {
-      setError('Impossibile sincronizzare i dati della sessione.')
-      setTranscriptSentiment(null)
+      setError('Unable to load meeting data')
     } finally {
       setLoading(false)
     }
   }
 
-  const searchSimilar = async () => {
-    if (!searchQuery.trim()) return
-    setLoading(true)
-    setError(null)
-    
-    try {
-      const response = await fetch(`${API_URL}/meeting/mtg001/similarity`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: searchQuery, top_k: 5 })
-      })
-      if (!response.ok) throw new Error(`Status ${response.status}`)
-      const data = await response.json()
-      setSimilarResults(data)
-      setActiveView('similarity')
-    } catch (err) {
-      setError('Errore nel motore di ricerca semantica.')
-    } finally {
-      setLoading(false)
+  const updateWidgetConfig = (widgetId, config) => {
+    setWidgetConfigs(prev => ({
+      ...prev,
+      [widgetId]: { ...prev[widgetId], ...config }
+    }))
+  }
+
+  const calculateStats = (filteredTranscript) => {
+    if (!filteredTranscript || filteredTranscript.length === 0) {
+      return {
+        totalMessages: 0,
+        avgSentiment: 0,
+        positiveRatio: 0,
+        toxicCount: 0,
+        toxicRatio: 0,
+        avgToxicity: 0
+      }
+    }
+
+    const totalMessages = filteredTranscript.length
+    let totalStars = 0
+    let positiveCount = 0
+    let toxicCount = 0
+    let totalToxicity = 0
+
+    filteredTranscript.forEach(entry => {
+      totalStars += entry.sentiment.stars
+      if (entry.sentiment.stars >= 3.5) positiveCount++
+      if (entry.toxicity.is_toxic) toxicCount++
+      totalToxicity += entry.toxicity.toxicity_score
+    })
+
+    return {
+      totalMessages,
+      avgSentiment: totalStars / totalMessages,
+      positiveRatio: positiveCount / totalMessages,
+      toxicCount,
+      toxicRatio: toxicCount / totalMessages,
+      avgToxicity: totalToxicity / totalMessages
     }
   }
-
-  const handleSearchKeyPress = (e) => {
-    if (e.key === 'Enter') searchSimilar()
-  }
-
-  // ============================================
-  // RENDER
-  // ============================================
 
   return (
     <div style={styles.appContainer}>
-      {/* SIDEBAR - Dark & Professional */}
-      <div style={styles.sidebar}>
-        <div style={styles.sidebarHeader}>
-          <div style={styles.logoCircle}>M</div>
-          <span style={styles.logoText}>MEETING<br/>INTELLIGENCE</span>
-        </div>
-
-        <div style={styles.sidebarNav}>
-          <SidebarItem 
-            label="Dashboard Operativa"
-            onClick={() => setIsPanelOpen(false)}
-            active={!isPanelOpen}
-          />
-          <SidebarItem 
-            label="Analisi AI"
-            onClick={() => setIsPanelOpen(!isPanelOpen)}
-            active={isPanelOpen}
-            badge={transcriptSentiment ? 'Ready' : null}
-          />
-          <SidebarItem 
-            label="Configurazione"
-            onClick={() => alert('Funzionalità riservata agli amministratori')}
-          />
-        </div>
-
-        <div style={styles.sidebarFooter}>
-          <div style={styles.userProfile}>
-            <div style={styles.userAvatar}>AD</div>
-            <div style={styles.userInfo}>
-              <span style={styles.userName}>Admin User</span>
-              <span style={styles.userRole}>Enterprise Plan</span>
+      {/* HEADER - Corporate Style */}
+      <div style={styles.header}>
+        <div style={styles.headerContent}>
+          <div style={styles.headerLeft}>
+            <div style={styles.logoContainer}>
+              <span style={styles.logoText}>MI</span>
+            </div>
+            <div>
+              <h1 style={styles.title}>Meeting Intelligence Platform</h1>
+              <span style={styles.subtitle}>Session MTG-001 • Real-time Analytics</span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* SLIDE-OUT PANEL */}
-      {isPanelOpen && (
-        <div style={styles.panel}>
-          <div style={styles.panelHeader}>
-            <div>
-              <h2 style={styles.panelTitle}>Analisi Riunione</h2>
-              <span style={styles.panelSubtitle}>ID: MTG-001 • Elaborazione Completata</span>
-            </div>
-            <button
-              onClick={() => setIsPanelOpen(false)}
-              style={styles.panelClose}
-            >
-              ✕
-            </button>
-          </div>
-
-          <div style={styles.searchContainer}>
-            <input
-              type="text"
-              placeholder="Cerca insights nel transcript..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyPress={handleSearchKeyPress}
-              style={styles.searchInput}
-            />
-          </div>
-
-          <div style={styles.tabContainer}>
-            <TabButton
-              label="Overview"
-              active={activeView === 'overview'}
-              onClick={() => setActiveView('overview')}
-            />
-            <TabButton
-              label="Transcript"
-              active={activeView === 'messages'}
-              onClick={() => setActiveView('messages')}
-            />
-            {similarResults && (
-              <TabButton
-                label={`Risultati (${similarResults.similar_messages.length})`}
-                active={activeView === 'similarity'}
-                onClick={() => setActiveView('similarity')}
-              />
-            )}
-          </div>
-
-          <div style={styles.panelContent}>
-            {error && (
-              <div style={styles.errorBanner}>
-                <div style={styles.errorDot}></div>
-                {error}
-              </div>
-            )}
-
-            {loading && (
-              <div style={styles.loadingContainer}>
-                <div style={styles.loaderLine}></div>
-                <p>Elaborazione NLP in corso...</p>
-              </div>
-            )}
-
-            {!loading && transcriptSentiment && activeView === 'overview' && (
-              <OverviewView data={transcriptSentiment} />
-            )}
-
-            {!loading && transcriptSentiment && activeView === 'messages' && (
-              <MessagesView data={transcriptSentiment} />
-            )}
-
-            {!loading && similarResults && activeView === 'similarity' && (
-              <SimilarityView data={similarResults} />
-            )}
-          </div>
+      {error && (
+        <div style={styles.errorBanner}>
+          <span style={styles.errorLabel}>Error:</span>
+          <span>{error}</span>
         </div>
       )}
 
-      {/* MAIN CONTENT AREA */}
-      <div style={{
-        ...styles.mainContent,
-        marginLeft: isPanelOpen ? '680px' : '280px' // Sidebar (280) + Panel (400)
-      }}>
-        <div style={styles.topNav}>
-          <span style={styles.breadcrumb}>Home / Meeting / <strong>MTG-001</strong></span>
-          <div style={styles.statusBadge}>
-            {transcriptSentiment ? '● Online' : '○ Offline'}
-          </div>
+      {loading && (
+        <div style={styles.loadingContainer}>
+          <div style={styles.spinner}></div>
+          <p style={styles.loadingText}>Loading analytics data...</p>
         </div>
+      )}
 
-        <div style={styles.contentWrapper}>
-          <div style={styles.heroSection}>
-            <h1 style={styles.pageTitle}>Meeting Board</h1>
-            <p style={styles.pageSubtitle}>Piattaforma centralizzata per la gestione dei verbali.</p>
-          </div>
-          
-          <div style={styles.mainCard}>
-            <div style={styles.cardHeaderBorder}>
-              <h2 style={styles.cardTitle}>Dettagli Sessione</h2>
-            </div>
-            
-            <div style={styles.cardBody}>
-              <p style={{lineHeight: '1.6', color: '#475569', marginBottom: '2rem'}}>
-                {transcriptSentiment 
-                  ? "I dati visualizzati di seguito sono calcolati in tempo reale dal motore NLP basato sul transcript recuperato." 
-                  : "Nessun dato caricato. Apri il pannello 'Analisi AI' sulla sinistra per inizializzare il caricamento e popolare le statistiche."}
-              </p>
+      {!loading && meetingData && (
+        <div style={styles.widgetGrid}>
+          {/* KPI Cards */}
+          <FormalKPIWidget
+            widgetId="kpiMessages"
+            title="Total Messages"
+            config={widgetConfigs.kpiMessages}
+            participants={participants}
+            data={meetingData.transcript}
+            onConfigChange={(config) => updateWidgetConfig('kpiMessages', config)}
+            calculateValue={(data) => data.length}
+            openSettings={openSettings}
+            setOpenSettings={setOpenSettings}
+          />
 
-              <div style={styles.statsRow}>
-                <FeatureBox 
-                  title="Messaggi Totali" 
-                  value={dashboardStats.messages} 
-                  icon="💬"
-                />
-                <FeatureBox 
-                  title="Partecipanti" 
-                  value={dashboardStats.participants} 
-                  icon="👥"
-                />
-                <FeatureBox 
-                  title="Durata Stimata" 
-                  value={dashboardStats.duration} 
-                  icon="⏱️"
-                />
-                <FeatureBox 
-                  title="Token (Est.)" 
-                  value={dashboardStats.tokens} 
-                  icon="🔢"
-                />
-              </div>
-            </div>
-          </div>
+          <FormalKPIWidget
+            widgetId="kpiSentiment"
+            title="Average Sentiment"
+            config={widgetConfigs.kpiSentiment}
+            participants={participants}
+            data={meetingData.transcript}
+            onConfigChange={(config) => updateWidgetConfig('kpiSentiment', config)}
+            calculateValue={(data) => {
+              const stats = calculateStats(data)
+              return stats.avgSentiment.toFixed(2)
+            }}
+            subtitle={(data) => {
+              const stats = calculateStats(data)
+              return `${(stats.positiveRatio * 100).toFixed(0)}% positive sentiment`
+            }}
+            openSettings={openSettings}
+            setOpenSettings={setOpenSettings}
+          />
+
+          <FormalKPIWidget
+            widgetId="kpiToxicity"
+            title="Toxicity Incidents"
+            config={widgetConfigs.kpiToxicity}
+            participants={participants}
+            data={meetingData.transcript}
+            onConfigChange={(config) => updateWidgetConfig('kpiToxicity', config)}
+            calculateValue={(data) => {
+              const stats = calculateStats(data)
+              return `${stats.toxicCount} of ${stats.totalMessages}`
+            }}
+            subtitle={(data) => {
+              const stats = calculateStats(data)
+              return `${(stats.toxicRatio * 100).toFixed(1)}% detection rate`
+            }}
+            openSettings={openSettings}
+            setOpenSettings={setOpenSettings}
+          />
+
+          {/* Sentiment Chart Widget */}
+          <FormalSentimentChart
+            widgetId="sentimentChart"
+            config={widgetConfigs.sentimentChart}
+            participants={participants}
+            data={meetingData.transcript}
+            onConfigChange={(config) => updateWidgetConfig('sentimentChart', config)}
+            openSettings={openSettings}
+            setOpenSettings={setOpenSettings}
+          />
+
+          {/* Toxicity Gauge Widget */}
+          <FormalToxicityGauge
+            widgetId="toxicityGauge"
+            config={widgetConfigs.toxicityGauge}
+            participants={participants}
+            data={meetingData.transcript}
+            calculateStats={calculateStats}
+            onConfigChange={(config) => updateWidgetConfig('toxicityGauge', config)}
+            openSettings={openSettings}
+            setOpenSettings={setOpenSettings}
+          />
+
+          {/* Message Stream Widget */}
+          <FormalMessageStream
+            widgetId="messageStream"
+            config={widgetConfigs.messageStream}
+            participants={participants}
+            data={meetingData.transcript}
+            onConfigChange={(config) => updateWidgetConfig('messageStream', config)}
+            openSettings={openSettings}
+            setOpenSettings={setOpenSettings}
+          />
         </div>
+      )}
+    </div>
+  )
+}
+
+// ============================================
+// FORMAL KPI WIDGET
+// ============================================
+
+function FormalKPIWidget({
+  widgetId,
+  title,
+  config,
+  participants,
+  data,
+  onConfigChange,
+  calculateValue,
+  subtitle,
+  openSettings,
+  setOpenSettings
+}) {
+  const filteredData = config.participant
+    ? data.filter(entry => {
+        const participant = participants.find(p => p.id === config.participant)
+        return entry.nickname === participant?.name
+      })
+    : data
+
+  const value = calculateValue(filteredData)
+  const subtitleText = subtitle ? subtitle(filteredData) : null
+
+  return (
+    <div style={{
+      ...styles.card,
+      borderLeft: config.showBorder ? '3px solid #333333' : 'none'
+    }}>
+      <div style={styles.cardHeader}>
+        <div style={styles.cardTitle}>
+          <span style={styles.cardTitleText}>{title}</span>
+        </div>
+        <button
+          onClick={() => setOpenSettings(openSettings === widgetId ? null : widgetId)}
+          style={styles.settingsButton}
+          title="Settings"
+        >
+          ⋮
+        </button>
+      </div>
+
+      {openSettings === widgetId && (
+        <FormalSettings
+          config={config}
+          participants={participants}
+          onConfigChange={onConfigChange}
+          options={[
+            { type: 'select', key: 'participant', label: 'Filter by Participant' },
+            { type: 'toggle', key: 'showBorder', label: 'Show Border Accent' }
+          ]}
+        />
+      )}
+
+      <div style={styles.kpiContent}>
+        <div style={styles.kpiValueContainer}>
+          <span style={styles.kpiValue}>{value}</span>
+        </div>
+        {subtitleText && (
+          <div style={styles.kpiSubtitle}>{subtitleText}</div>
+        )}
       </div>
     </div>
   )
 }
 
 // ============================================
-// COMPONENTS
+// FORMAL SENTIMENT CHART
 // ============================================
 
-function SidebarItem({ label, onClick, active, badge }) {
-  return (
-    <div
-      onClick={onClick}
-      style={{
-        ...styles.sidebarItem,
-        ...(active ? styles.sidebarItemActive : {})
-      }}
-    >
-      <div style={styles.sidebarLabelContainer}>
-        {active && <div style={styles.activeIndicator}></div>}
-        <span style={{...styles.sidebarLabel, fontWeight: active ? '600' : '400'}}>
-          {label}
-        </span>
-      </div>
-      {badge && <span style={styles.sidebarBadge}>{badge}</span>}
-    </div>
-  )
-}
+function FormalSentimentChart({
+  widgetId,
+  config,
+  participants,
+  data,
+  onConfigChange,
+  openSettings,
+  setOpenSettings
+}) {
+  const filteredData = config.participant
+    ? data.filter(entry => {
+        const participant = participants.find(p => p.id === config.participant)
+        return entry.nickname === participant?.name
+      })
+    : data
 
-function TabButton({ label, active, onClick }) {
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        ...styles.tabButton,
-        ...(active ? styles.tabButtonActive : {})
-      }}
-    >
-      {label}
-    </button>
-  )
-}
+  const counts = {
+    very_positive: 0,
+    positive: 0,
+    neutral: 0,
+    negative: 0,
+    very_negative: 0
+  }
 
-function OverviewView({ data }) {
-  const stats = data.metadata.sentiment_stats
+  filteredData.forEach(entry => {
+    const sentiment = entry.sentiment.sentiment
+    if (counts[sentiment] !== undefined) counts[sentiment]++
+  })
 
-  return (
-    <div style={styles.viewContainer}>
-      <h3 style={styles.sectionHeader}>KPI Sentiment</h3>
-      
-      <div style={styles.kpiGrid}>
-        <KpiCard label="Average Score" value={stats.average_stars.toFixed(1)} sub="/ 5.0" color="#3b82f6" />
-        <KpiCard label="Positivity Rate" value={(stats.positive_ratio * 100).toFixed(0)} sub="%" color="#10b981" />
-        <KpiCard label="Total Messages" value={stats.total_analyzed} sub="" color="#6366f1" />
-      </div>
+  const total = filteredData.length
+  const percentages = Object.entries(counts).map(([key, count]) => ({
+    key,
+    count,
+    percentage: total > 0 ? (count / total) * 100 : 0
+  }))
 
-      <div style={styles.chartSection}>
-        <h4 style={styles.chartTitle}>Distribuzione Tono</h4>
-        <SentimentBar data={data.transcript} />
-        <div style={styles.chartLegend}>
-          <span>Negative</span>
-          <span>Neutral</span>
-          <span>Positive</span>
-        </div>
-      </div>
+  // Scala di grigi (dal chiaro al scuro per rappresentare neg to pos)
+  const grayScaleMap = {
+    very_negative: '#1a1a1a',
+    negative: '#4a4a4a',
+    neutral: '#808080',
+    positive: '#b0b0b0',
+    very_positive: '#d0d0d0'
+  }
 
-      <div style={styles.insightCard}>
-        <div style={styles.insightHeader}>AUTO-INSIGHTS</div>
-        <ul style={styles.insightList}>
-          <li>Il sentiment complessivo è <strong>{stats.average_stars >= 3 ? 'Positivo' : 'Critico'}</strong>.</li>
-          <li>Rilevata predominanza di interventi {stats.positive_ratio > 0.5 ? 'costruttivi' : 'neutri o critici'}.</li>
-        </ul>
-      </div>
-    </div>
-  )
-}
-
-function MessagesView({ data }) {
-  return (
-    <div style={styles.viewContainer}>
-      <h3 style={styles.sectionHeader}>Transcript Log</h3>
-      <div style={styles.messageStream}>
-        {data.transcript.map((entry, idx) => (
-          <MessageBubble key={idx} entry={entry} />
-        ))}
-      </div>
-    </div>
-  )
-}
-
-function SimilarityView({ data }) {
-  return (
-    <div style={styles.viewContainer}>
-      <h3 style={styles.sectionHeader}>Risultati Semantici</h3>
-      <div style={styles.queryBadge}>Query: {data.query}</div>
-      <div style={styles.resultsStack}>
-        {data.similar_messages.map((msg, idx) => (
-          <SimilarResultRow key={idx} message={msg} />
-        ))}
-      </div>
-    </div>
-  )
-}
-
-function KpiCard({ label, value, sub, color }) {
-  return (
-    <div style={styles.kpiCard}>
-      <div style={styles.kpiLabel}>{label}</div>
-      <div style={{...styles.kpiValue, color}}>{value}<span style={styles.kpiSub}>{sub}</span></div>
-    </div>
-  )
-}
-
-function SentimentBar({ data }) {
-  const counts = { very_positive: 0, positive: 0, neutral: 0, negative: 0, very_negative: 0 }
-  data.forEach(entry => counts[entry.sentiment.sentiment]++)
-  const total = data.length
-  
-  const colors = {
-    very_positive: '#059669', positive: '#34d399', neutral: '#94a3b8', negative: '#f87171', very_negative: '#dc2626'
+  const labelMap = {
+    very_positive: 'Very Positive',
+    positive: 'Positive',
+    neutral: 'Neutral',
+    negative: 'Negative',
+    very_negative: 'Very Negative'
   }
 
   return (
-    <div style={styles.barTrack}>
-      {Object.keys(counts).map(key => {
-        const pct = (counts[key] / total) * 100
-        return pct > 0 ? (
-          <div key={key} style={{...styles.barFill, width: `${pct}%`, backgroundColor: colors[key]}} />
-        ) : null
-      })}
-    </div>
-  )
-}
-
-function MessageBubble({ entry }) {
-  const sentimentColor = {
-    'very_positive': '#10b981', 'positive': '#34d399', 'neutral': '#cbd5e1', 'negative': '#f87171', 'very_negative': '#ef4444'
-  }[entry.sentiment.sentiment]
-
-  return (
-    <div style={{...styles.msgBubble, borderLeft: `4px solid ${sentimentColor}`}}>
-      <div style={styles.msgMeta}>
-        <span style={styles.msgAuthor}>{entry.nickname}</span>
-        <span style={styles.msgScore}>{entry.sentiment.stars.toFixed(1)}</span>
-      </div>
-      <p style={styles.msgText}>{entry.text}</p>
-      <div style={styles.msgTime}>{entry.from}</div>
-    </div>
-  )
-}
-
-function SimilarResultRow({ message }) {
-  const opacity = Math.max(0.4, message.similarity); 
-  return (
-    <div style={{...styles.resultRow, opacity}}>
-      <div style={styles.resultRank}>#{message.rank}</div>
-      <div style={styles.resultContent}>
-        <div style={styles.resultText}>"{message.text}"</div>
-        <div style={styles.resultMeta}>
-          <span style={styles.resultMatch}>{(message.similarity * 100).toFixed(0)}% Match</span>
-          <span> • {message.speaker}</span>
+    <div style={{ ...styles.card, ...styles.wideCard }}>
+      <div style={styles.cardHeader}>
+        <div style={styles.cardTitle}>
+          <span style={styles.cardTitleText}>Sentiment Distribution Analysis</span>
         </div>
+        <button
+          onClick={() => setOpenSettings(openSettings === widgetId ? null : widgetId)}
+          style={styles.settingsButton}
+          title="Settings"
+        >
+          ⋮
+        </button>
       </div>
-    </div>
-  )
-}
 
-function FeatureBox({ title, value, icon }) {
-  return (
-    <div style={styles.featureBox}>
-      <div style={styles.fbIcon}>{icon}</div>
-      <div style={styles.fbValue}>{value}</div>
-      <div style={styles.fbTitle}>{title}</div>
+      {openSettings === widgetId && (
+        <FormalSettings
+          config={config}
+          participants={participants}
+          onConfigChange={onConfigChange}
+          options={[
+            { type: 'select', key: 'participant', label: 'Filter by Participant' },
+            { type: 'toggle', key: 'showLabels', label: 'Display Labels' },
+            { type: 'toggle', key: 'showLegend', label: 'Display Legend' }
+          ]}
+        />
+      )}
+
+      <div style={styles.chartContent}>
+        {config.showLabels && (
+          <div style={styles.chartLabels}>
+            <span style={styles.chartLabelText}>Negative</span>
+            <span style={styles.chartLabelText}>Neutral</span>
+            <span style={styles.chartLabelText}>Positive</span>
+          </div>
+        )}
+
+        <div style={styles.barContainer}>
+          {percentages.map(({ key, percentage }) =>
+            percentage > 0 ? (
+              <div
+                key={key}
+                style={{
+                  width: `${percentage}%`,
+                  height: '100%',
+                  backgroundColor: grayScaleMap[key],
+                  position: 'relative'
+                }}
+                title={`${labelMap[key]}: ${percentage.toFixed(1)}%`}
+              />
+            ) : null
+          )}
+        </div>
+
+        {config.showLegend && (
+          <div style={styles.legend}>
+            {percentages.map(({ key, count, percentage }) => (
+              <div key={key} style={styles.legendRow}>
+                <div
+                  style={{
+                    ...styles.legendSquare,
+                    backgroundColor: grayScaleMap[key]
+                  }}
+                />
+                <span style={styles.legendText}>
+                  {labelMap[key]}: {count} ({percentage.toFixed(1)}%)
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
 
 // ============================================
-// STYLES SYSTEM
+// FORMAL TOXICITY GAUGE
+// ============================================
+
+function FormalToxicityGauge({
+  widgetId,
+  config,
+  participants,
+  data,
+  calculateStats,
+  onConfigChange,
+  openSettings,
+  setOpenSettings
+}) {
+  const filteredData = config.participant
+    ? data.filter(entry => {
+        const participant = participants.find(p => p.id === config.participant)
+        return entry.nickname === participant?.name
+      })
+    : data
+
+  const stats = calculateStats(filteredData)
+  const percentage = stats.avgToxicity * 100
+
+  const getRiskLevel = () => {
+    if (stats.avgToxicity < 0.2) return 'LOW'
+    if (stats.avgToxicity < 0.5) return 'MEDIUM'
+    return 'HIGH'
+  }
+
+  return (
+    <div style={styles.card}>
+      <div style={styles.cardHeader}>
+        <div style={styles.cardTitle}>
+          <span style={styles.cardTitleText}>Toxicity Analysis</span>
+        </div>
+        <button
+          onClick={() => setOpenSettings(openSettings === widgetId ? null : widgetId)}
+          style={styles.settingsButton}
+          title="Settings"
+        >
+          ⋮
+        </button>
+      </div>
+
+      {openSettings === widgetId && (
+        <FormalSettings
+          config={config}
+          participants={participants}
+          onConfigChange={onConfigChange}
+          options={[
+            { type: 'select', key: 'participant', label: 'Filter by Participant' },
+            { type: 'toggle', key: 'showDetails', label: 'Show Detailed Metrics' }
+          ]}
+        />
+      )}
+
+      {filteredData.length > 0 ? (
+        <div style={styles.gaugeContent}>
+          <div style={styles.gaugeContainer}>
+            <svg width="180" height="180" viewBox="0 0 180 180">
+              {/* Background circle */}
+              <circle
+                cx="90"
+                cy="90"
+                r="70"
+                fill="none"
+                stroke="#e5e5e5"
+                strokeWidth="12"
+              />
+              {/* Progress circle */}
+              <circle
+                cx="90"
+                cy="90"
+                r="70"
+                fill="none"
+                stroke="#333333"
+                strokeWidth="12"
+                strokeDasharray={`${(percentage / 100) * 439.8} 439.8`}
+                strokeDashoffset="0"
+                transform="rotate(-90 90 90)"
+                strokeLinecap="round"
+              />
+              {/* Center text */}
+              <text
+                x="90"
+                y="85"
+                textAnchor="middle"
+                style={{
+                  fontSize: '32px',
+                  fontWeight: '600',
+                  fill: '#1a1a1a',
+                  fontFamily: 'monospace'
+                }}
+              >
+                {percentage.toFixed(0)}%
+              </text>
+              <text
+                x="90"
+                y="105"
+                textAnchor="middle"
+                style={{
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  fill: '#666666',
+                  letterSpacing: '1px'
+                }}
+              >
+                {getRiskLevel()}
+              </text>
+            </svg>
+          </div>
+
+          {config.showDetails && (
+            <div style={styles.detailsGrid}>
+              <div style={styles.detailItem}>
+                <span style={styles.detailLabel}>Average Score</span>
+                <span style={styles.detailValue}>{stats.avgToxicity.toFixed(3)}</span>
+              </div>
+              <div style={styles.detailItem}>
+                <span style={styles.detailLabel}>Toxic Messages</span>
+                <span style={styles.detailValue}>
+                  {stats.toxicCount} / {stats.totalMessages}
+                </span>
+              </div>
+              <div style={styles.detailItem}>
+                <span style={styles.detailLabel}>Detection Rate</span>
+                <span style={styles.detailValue}>
+                  {(stats.toxicRatio * 100).toFixed(1)}%
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div style={styles.emptyState}>No data available for selected filter</div>
+      )}
+    </div>
+  )
+}
+
+// ============================================
+// FORMAL MESSAGE STREAM
+// ============================================
+
+function FormalMessageStream({
+  widgetId,
+  config,
+  participants,
+  data,
+  onConfigChange,
+  openSettings,
+  setOpenSettings
+}) {
+  const filteredData = config.participant
+    ? data.filter(entry => {
+        const participant = participants.find(p => p.id === config.participant)
+        return entry.nickname === participant?.name
+      })
+    : data
+
+  const displayMessages = filteredData.slice(0, config.limit || 10)
+
+  return (
+    <div style={{ ...styles.card, ...styles.wideCard }}>
+      <div style={styles.cardHeader}>
+        <div style={styles.cardTitle}>
+          <span style={styles.cardTitleText}>Message Stream</span>
+          <span style={styles.cardBadge}>{displayMessages.length} messages</span>
+        </div>
+        <button
+          onClick={() => setOpenSettings(openSettings === widgetId ? null : widgetId)}
+          style={styles.settingsButton}
+          title="Settings"
+        >
+          ⋮
+        </button>
+      </div>
+
+      {openSettings === widgetId && (
+        <FormalSettings
+          config={config}
+          participants={participants}
+          onConfigChange={onConfigChange}
+          options={[
+            { type: 'select', key: 'participant', label: 'Filter by Participant' },
+            { type: 'slider', key: 'limit', label: 'Message Limit', min: 5, max: 20 },
+            { type: 'toggle', key: 'showTimestamps', label: 'Show Timestamps' },
+            { type: 'toggle', key: 'compact', label: 'Compact View' }
+          ]}
+        />
+      )}
+
+      <div style={styles.messageList}>
+        {displayMessages.map((msg, idx) => (
+          <FormalMessageItem
+            key={idx}
+            message={msg}
+            showTimestamp={config.showTimestamps}
+            compact={config.compact}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function FormalMessageItem({ message, showTimestamp, compact }) {
+  // Calcola intensità grigio basato su sentiment (1=scuro, 5=chiaro)
+  const sentimentGray = Math.round((message.sentiment.stars / 5) * 255)
+  const sentimentColor = `rgb(${sentimentGray}, ${sentimentGray}, ${sentimentGray})`
+
+  return (
+    <div
+      style={{
+        ...styles.messageItem,
+        ...(compact ? styles.messageItemCompact : {}),
+        borderLeft: `3px solid ${sentimentColor}`
+      }}
+    >
+      <div style={styles.messageHeader}>
+        <span style={styles.messageAuthor}>{message.nickname}</span>
+        <div style={styles.messageMetrics}>
+          <span style={styles.metricBadge}>
+            Sentiment: {message.sentiment.stars.toFixed(1)}
+          </span>
+          {message.toxicity.is_toxic && (
+            <span style={{ ...styles.metricBadge, ...styles.metricBadgeToxic }}>
+              Toxic
+            </span>
+          )}
+        </div>
+      </div>
+      <p style={styles.messageText}>{message.text}</p>
+      {showTimestamp && (
+        <span style={styles.messageTime}>{message.from}</span>
+      )}
+    </div>
+  )
+}
+
+// ============================================
+// FORMAL SETTINGS PANEL
+// ============================================
+
+function FormalSettings({ config, participants, onConfigChange, options }) {
+  return (
+    <div style={styles.settingsPanel}>
+      <div style={styles.settingsPanelHeader}>
+        <span style={styles.settingsPanelTitle}>Widget Configuration</span>
+      </div>
+      {options.map((option, idx) => (
+        <div key={idx} style={styles.settingRow}>
+          <span style={styles.settingLabel}>{option.label}</span>
+
+          {option.type === 'select' && (
+            <select
+              value={config[option.key] || ''}
+              onChange={(e) =>
+                onConfigChange({ [option.key]: e.target.value || null })
+              }
+              style={styles.settingSelect}
+            >
+              <option value="">All Participants</option>
+              {participants.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          )}
+
+          {option.type === 'toggle' && (
+            <label style={styles.checkboxLabel}>
+              <input
+                type="checkbox"
+                checked={config[option.key] || false}
+                onChange={(e) =>
+                  onConfigChange({ [option.key]: e.target.checked })
+                }
+                style={styles.checkbox}
+              />
+              <span style={styles.checkboxText}>
+                {config[option.key] ? 'Enabled' : 'Disabled'}
+              </span>
+            </label>
+          )}
+
+          {option.type === 'slider' && (
+            <div style={styles.sliderContainer}>
+              <input
+                type="range"
+                min={option.min}
+                max={option.max}
+                value={config[option.key] || option.min}
+                onChange={(e) =>
+                  onConfigChange({ [option.key]: parseInt(e.target.value) })
+                }
+                style={styles.slider}
+              />
+              <span style={styles.sliderValue}>
+                {config[option.key] || option.min}
+              </span>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ============================================
+// STYLES - FORMAL CORPORATE THEME
 // ============================================
 
 const styles = {
   appContainer: {
-    display: 'flex',
     minHeight: '100vh',
-    backgroundColor: '#f1f5f9', 
-    fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-    color: '#334155'
+    backgroundColor: '#fafafa',
+    fontFamily: '"Inter", "Helvetica Neue", Arial, sans-serif',
+    color: '#1a1a1a'
   },
 
-  // SIDEBAR (Dark Theme)
-  sidebar: {
-    width: '280px',
-    backgroundColor: '#0f172a', 
-    display: 'flex',
-    flexDirection: 'column',
-    position: 'fixed',
-    left: 0,
+  // HEADER
+  header: {
+    backgroundColor: '#ffffff',
+    borderBottom: '1px solid #e0e0e0',
+    position: 'sticky',
     top: 0,
-    bottom: 0,
-    zIndex: 50,
-    color: '#94a3b8'
+    zIndex: 100,
+    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)'
   },
-  sidebarHeader: {
-    padding: '2rem 1.5rem',
+  headerContent: {
+    maxWidth: '1400px',
+    margin: '0 auto',
+    padding: '1.25rem 2rem',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center'
+  },
+  headerLeft: {
     display: 'flex',
     alignItems: 'center',
-    gap: '1rem',
-    borderBottom: '1px solid #1e293b'
+    gap: '1rem'
   },
-  logoCircle: {
-    width: '32px',
-    height: '32px',
-    backgroundColor: '#3b82f6',
-    borderRadius: '8px',
-    color: 'white',
+  logoContainer: {
+    width: '48px',
+    height: '48px',
+    backgroundColor: '#1a1a1a',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    fontWeight: 'bold',
-    fontSize: '0.9rem'
+    border: '2px solid #333333'
   },
   logoText: {
-    color: '#f8fafc',
-    fontSize: '0.75rem',
+    color: '#ffffff',
+    fontSize: '1.2rem',
     fontWeight: '700',
     letterSpacing: '1px',
-    lineHeight: '1.2'
+    fontFamily: 'monospace'
   },
-  sidebarNav: {
-    padding: '1.5rem 1rem',
-    flex: 1,
+  title: {
+    margin: 0,
+    fontSize: '1.25rem',
+    fontWeight: '600',
+    color: '#1a1a1a',
+    letterSpacing: '-0.01em'
+  },
+  subtitle: {
+    fontSize: '0.8rem',
+    color: '#666666',
+    fontWeight: '400',
+    letterSpacing: '0.02em'
+  },
+
+  // ERROR & LOADING
+  errorBanner: {
+    padding: '1rem 2rem',
+    margin: '1rem 2rem',
+    backgroundColor: '#f5f5f5',
+    border: '1px solid #cccccc',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.75rem',
+    fontSize: '0.9rem',
+    color: '#333333'
+  },
+  errorLabel: {
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    fontSize: '0.75rem',
+    letterSpacing: '0.5px'
+  },
+  loadingContainer: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '0.25rem'
-  },
-  sidebarItem: {
-    padding: '0.75rem 1rem',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    transition: 'all 0.2s ease',
-    fontSize: '0.9rem'
-  },
-  sidebarItemActive: {
-    backgroundColor: '#1e293b',
-    color: '#f8fafc'
-  },
-  sidebarLabelContainer: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.75rem'
-  },
-  activeIndicator: {
-    width: '6px',
-    height: '6px',
-    borderRadius: '50%',
-    backgroundColor: '#3b82f6',
-    boxShadow: '0 0 8px #3b82f6'
-  },
-  sidebarBadge: {
-    fontSize: '0.65rem',
-    backgroundColor: '#3b82f6',
-    color: 'white',
-    padding: '2px 8px',
-    borderRadius: '12px',
-    fontWeight: '600'
-  },
-  sidebarFooter: {
-    padding: '1.5rem',
-    borderTop: '1px solid #1e293b'
-  },
-  userProfile: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.75rem'
-  },
-  userAvatar: {
-    width: '36px',
-    height: '36px',
-    borderRadius: '50%',
-    backgroundColor: '#334155',
-    color: '#cbd5e1',
-    display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    fontSize: '0.8rem',
-    fontWeight: '600'
+    minHeight: '60vh',
+    gap: '1.5rem'
   },
-  userInfo: {
-    display: 'flex',
-    flexDirection: 'column'
+  spinner: {
+    width: '40px',
+    height: '40px',
+    border: '3px solid #e0e0e0',
+    borderTop: '3px solid #333333',
+    borderRadius: '50%',
+    animation: 'spin 1s linear infinite'
   },
-  userName: { color: '#f8fafc', fontSize: '0.85rem', fontWeight: '500' },
-  userRole: { fontSize: '0.7rem', color: '#64748b' },
+  loadingText: {
+    fontSize: '0.9rem',
+    color: '#666666',
+    fontWeight: '500',
+    letterSpacing: '0.02em'
+  },
 
-  // PANEL (Slide-out)
-  panel: {
-    width: '400px', 
-    backgroundColor: 'white',
-    boxShadow: '-4px 0 24px rgba(0,0,0,0.08)',
-    display: 'flex',
-    flexDirection: 'column',
-    position: 'fixed',
-    left: '280px',
-    top: 0,
-    bottom: 0,
-    zIndex: 40,
-    borderRight: '1px solid #e2e8f0'
+  // WIDGET GRID
+  widgetGrid: {
+    maxWidth: '1400px',
+    margin: '0 auto',
+    padding: '2rem',
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+    gap: '1.5rem'
   },
-  panelHeader: {
+
+  // CARD
+  card: {
+    backgroundColor: '#ffffff',
+    border: '1px solid #e0e0e0',
     padding: '1.5rem',
+    transition: 'box-shadow 0.2s ease',
+    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)'
+  },
+  wideCard: {
+    gridColumn: 'span 2'
+  },
+
+  // CARD HEADER
+  cardHeader: {
     display: 'flex',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    borderBottom: '1px solid #f1f5f9'
+    alignItems: 'center',
+    marginBottom: '1.25rem',
+    paddingBottom: '0.75rem',
+    borderBottom: '1px solid #f0f0f0'
   },
-  panelTitle: { fontSize: '1.1rem', fontWeight: '700', color: '#1e293b', margin: 0 },
-  panelSubtitle: { fontSize: '0.75rem', color: '#94a3b8', marginTop: '4px', display: 'block' },
-  panelClose: {
-    background: 'none', border: 'none', color: '#cbd5e1', fontSize: '1.2rem', cursor: 'pointer'
+  cardTitle: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.75rem',
+    flex: 1
+  },
+  cardTitleText: {
+    fontSize: '0.95rem',
+    fontWeight: '600',
+    color: '#1a1a1a',
+    letterSpacing: '0.01em',
+    textTransform: 'uppercase',
+    fontSize: '0.8rem'
+  },
+  cardBadge: {
+    fontSize: '0.7rem',
+    color: '#666666',
+    backgroundColor: '#f5f5f5',
+    padding: '0.25rem 0.6rem',
+    fontWeight: '500',
+    letterSpacing: '0.02em'
+  },
+  settingsButton: {
+    width: '32px',
+    height: '32px',
+    backgroundColor: 'transparent',
+    border: '1px solid #e0e0e0',
+    fontSize: '1.2rem',
+    color: '#666666',
+    cursor: 'pointer',
+    transition: 'all 0.2s ease',
+    fontWeight: '700'
   },
 
-  // SEARCH & TABS
-  searchContainer: { padding: '1rem 1.5rem', borderBottom: '1px solid #f1f5f9' },
-  searchInput: {
-    width: '100%', boxSizing: 'border-box', padding: '0.75rem 1rem', fontSize: '0.9rem',
-    border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none',
-    backgroundColor: '#f8fafc', transition: 'all 0.2s',
-    boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.02)'
+  // KPI CONTENT
+  kpiContent: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '1rem',
+    padding: '1.5rem 0'
   },
-  tabContainer: {
-    display: 'flex', padding: '0.5rem 1.5rem 0', gap: '1.5rem', borderBottom: '1px solid #e2e8f0'
+  kpiValueContainer: {
+    textAlign: 'center',
+    padding: '2rem',
+    backgroundColor: '#fafafa',
+    border: '2px solid #e0e0e0'
   },
-  tabButton: {
-    padding: '0.75rem 0', fontSize: '0.85rem', fontWeight: '500', color: '#64748b',
-    border: 'none', background: 'none', cursor: 'pointer', borderBottom: '2px solid transparent',
-    transition: 'color 0.2s'
+  kpiValue: {
+    fontSize: '3rem',
+    fontWeight: '300',
+    color: '#1a1a1a',
+    fontFamily: 'monospace',
+    letterSpacing: '-0.02em'
   },
-  tabButtonActive: { color: '#3b82f6', borderBottom: '2px solid #3b82f6' },
+  kpiSubtitle: {
+    fontSize: '0.85rem',
+    color: '#666666',
+    textAlign: 'center',
+    fontWeight: '500',
+    letterSpacing: '0.02em'
+  },
 
-  // CONTENT AREA
-  panelContent: { flex: 1, overflowY: 'auto', padding: '1.5rem' },
-  
-  viewContainer: { display: 'flex', flexDirection: 'column', gap: '1.5rem' },
-  sectionHeader: { 
-    fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', 
-    color: '#94a3b8', fontWeight: '600', marginBottom: '0.5rem' 
+  // CHART
+  chartContent: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '1.5rem'
+  },
+  chartLabels: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    fontSize: '0.75rem',
+    color: '#666666',
+    textTransform: 'uppercase',
+    letterSpacing: '0.5px',
+    fontWeight: '600'
+  },
+  chartLabelText: {
+    fontSize: '0.7rem'
+  },
+  barContainer: {
+    display: 'flex',
+    height: '32px',
+    border: '1px solid #e0e0e0',
+    overflow: 'hidden'
+  },
+  legend: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(2, 1fr)',
+    gap: '0.75rem',
+    marginTop: '0.5rem'
+  },
+  legendRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem'
+  },
+  legendSquare: {
+    width: '14px',
+    height: '14px',
+    border: '1px solid #cccccc'
+  },
+  legendText: {
+    fontSize: '0.8rem',
+    color: '#666666',
+    fontWeight: '500'
   },
 
-  // KPI CARDS
-  kpiGrid: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem' },
-  kpiCard: {
-    padding: '1rem', backgroundColor: 'white', borderRadius: '8px',
-    border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+  // GAUGE
+  gaugeContent: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '2rem',
+    padding: '1rem 0'
+  },
+  gaugeContainer: {
+    display: 'flex',
+    justifyContent: 'center'
+  },
+  detailsGrid: {
+    width: '100%',
+    display: 'grid',
+    gridTemplateColumns: 'repeat(3, 1fr)',
+    gap: '1rem'
+  },
+  detailItem: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.25rem',
+    padding: '1rem',
+    backgroundColor: '#fafafa',
+    border: '1px solid #e0e0e0',
     textAlign: 'center'
   },
-  kpiLabel: { fontSize: '0.7rem', color: '#64748b', marginBottom: '0.25rem' },
-  kpiValue: { fontSize: '1.25rem', fontWeight: '700', lineHeight: '1' },
-  kpiSub: { fontSize: '0.7rem', fontWeight: '400', opacity: 0.7 },
-
-  // CHARTS
-  chartSection: { padding: '1rem', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' },
-  chartTitle: { fontSize: '0.8rem', fontWeight: '600', marginBottom: '0.75rem', color: '#475569' },
-  barTrack: { display: 'flex', height: '12px', borderRadius: '6px', overflow: 'hidden', backgroundColor: '#e2e8f0' },
-  barFill: { height: '100%' },
-  chartLegend: { display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: '#94a3b8', marginTop: '0.5rem' },
-
-  // INSIGHTS
-  insightCard: {
-    padding: '1rem', backgroundColor: '#eff6ff', border: '1px solid #dbeafe', borderRadius: '8px'
+  detailLabel: {
+    fontSize: '0.7rem',
+    color: '#666666',
+    textTransform: 'uppercase',
+    letterSpacing: '0.5px',
+    fontWeight: '600'
   },
-  insightHeader: { fontSize: '0.7rem', color: '#3b82f6', fontWeight: '700', marginBottom: '0.5rem', letterSpacing: '0.5px' },
-  insightList: { margin: 0, paddingLeft: '1rem', fontSize: '0.85rem', color: '#334155', lineHeight: '1.5' },
+  detailValue: {
+    fontSize: '1.1rem',
+    color: '#1a1a1a',
+    fontWeight: '600',
+    fontFamily: 'monospace'
+  },
 
   // MESSAGES
-  messageStream: { display: 'flex', flexDirection: 'column', gap: '1rem' },
-  msgBubble: {
-    padding: '1rem', backgroundColor: 'white', borderRadius: '0 8px 8px 0',
-    border: '1px solid #e2e8f0', borderLeftWidth: '4px',
-    boxShadow: '0 1px 2px rgba(0,0,0,0.02)'
+  messageList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.75rem',
+    maxHeight: '500px',
+    overflowY: 'auto'
   },
-  msgMeta: { display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' },
-  msgAuthor: { fontSize: '0.8rem', fontWeight: '700', color: '#1e293b' },
-  msgScore: { fontSize: '0.7rem', color: '#94a3b8', backgroundColor: '#f1f5f9', padding: '1px 6px', borderRadius: '4px' },
-  msgText: { fontSize: '0.9rem', lineHeight: '1.5', color: '#475569', margin: 0 },
-  msgTime: { fontSize: '0.7rem', color: '#cbd5e1', marginTop: '0.5rem', textAlign: 'right' },
+  messageItem: {
+    padding: '1rem',
+    backgroundColor: '#fafafa',
+    border: '1px solid #e0e0e0',
+    borderLeft: '3px solid #666666',
+    transition: 'background-color 0.2s ease'
+  },
+  messageItemCompact: {
+    padding: '0.75rem'
+  },
+  messageHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '0.5rem'
+  },
+  messageAuthor: {
+    fontSize: '0.85rem',
+    fontWeight: '600',
+    color: '#1a1a1a',
+    textTransform: 'uppercase',
+    letterSpacing: '0.5px'
+  },
+  messageMetrics: {
+    display: 'flex',
+    gap: '0.5rem'
+  },
+  metricBadge: {
+    fontSize: '0.7rem',
+    color: '#666666',
+    backgroundColor: '#ffffff',
+    padding: '0.25rem 0.6rem',
+    border: '1px solid #e0e0e0',
+    fontWeight: '600',
+    letterSpacing: '0.02em'
+  },
+  metricBadgeToxic: {
+    color: '#1a1a1a',
+    borderColor: '#333333',
+    fontWeight: '700'
+  },
+  messageText: {
+    margin: 0,
+    fontSize: '0.9rem',
+    lineHeight: '1.6',
+    color: '#333333'
+  },
+  messageTime: {
+    display: 'block',
+    marginTop: '0.5rem',
+    fontSize: '0.75rem',
+    color: '#999999',
+    fontFamily: 'monospace'
+  },
 
-  // SEARCH RESULTS
-  queryBadge: { 
-    display: 'inline-block', fontSize: '0.75rem', color: '#3b82f6', backgroundColor: '#eff6ff', 
-    padding: '4px 8px', borderRadius: '4px', marginBottom: '1rem', border: '1px solid #dbeafe' 
+  // SETTINGS PANEL
+  settingsPanel: {
+    marginTop: '1rem',
+    padding: '1rem',
+    backgroundColor: '#f5f5f5',
+    border: '1px solid #e0e0e0',
+    animation: 'slideDown 0.3s ease'
   },
-  resultsStack: { display: 'flex', flexDirection: 'column', gap: '0.5rem' },
-  resultRow: { 
-    display: 'flex', gap: '0.75rem', padding: '0.75rem', backgroundColor: 'white', 
-    border: '1px solid #e2e8f0', borderRadius: '6px' 
+  settingsPanelHeader: {
+    marginBottom: '1rem',
+    paddingBottom: '0.75rem',
+    borderBottom: '1px solid #cccccc'
   },
-  resultRank: { fontSize: '0.8rem', fontWeight: '700', color: '#cbd5e1' },
-  resultContent: { flex: 1 },
-  resultText: { fontSize: '0.85rem', color: '#334155', marginBottom: '0.25rem', fontStyle: 'italic' },
-  resultMatch: { color: '#10b981', fontWeight: '600' },
-  resultMeta: { fontSize: '0.7rem', color: '#94a3b8' },
+  settingsPanelTitle: {
+    fontSize: '0.75rem',
+    fontWeight: '700',
+    color: '#1a1a1a',
+    textTransform: 'uppercase',
+    letterSpacing: '1px'
+  },
+  settingRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '0.75rem 0',
+    borderBottom: '1px solid #e0e0e0'
+  },
+  settingLabel: {
+    fontSize: '0.85rem',
+    color: '#333333',
+    fontWeight: '500'
+  },
 
-  // MAIN LAYOUT & HERO
-  mainContent: { flex: 1, transition: 'margin-left 0.3s ease', backgroundColor: '#f1f5f9' },
-  topNav: { 
-    height: '60px', borderBottom: '1px solid #e2e8f0', backgroundColor: 'white', 
-    display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 2rem' 
+  // FORM CONTROLS
+  settingSelect: {
+    padding: '0.5rem 0.75rem',
+    fontSize: '0.85rem',
+    backgroundColor: '#ffffff',
+    border: '1px solid #cccccc',
+    color: '#1a1a1a',
+    fontWeight: '500',
+    cursor: 'pointer',
+    minWidth: '150px'
   },
-  breadcrumb: { fontSize: '0.85rem', color: '#64748b' },
-  statusBadge: { fontSize: '0.75rem', color: '#10b981', fontWeight: '600', backgroundColor: '#ecfdf5', padding: '4px 8px', borderRadius: '12px' },
-  contentWrapper: { padding: '2rem 3rem', maxWidth: '1200px', margin: '0 auto' },
-  heroSection: { marginBottom: '2.5rem' },
-  pageTitle: { fontSize: '1.8rem', fontWeight: '800', color: '#0f172a', margin: '0 0 0.5rem 0', letterSpacing: '-0.02em' },
-  pageSubtitle: { fontSize: '1rem', color: '#64748b' },
-  
-  mainCard: { 
-    backgroundColor: 'white', borderRadius: '12px', 
-    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)',
-    border: '1px solid #e2e8f0'
+  checkboxLabel: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem',
+    cursor: 'pointer'
   },
-  cardHeaderBorder: { padding: '1.5rem 2rem', borderBottom: '1px solid #f1f5f9' },
-  cardTitle: { fontSize: '1.1rem', fontWeight: '600', color: '#1e293b', margin: 0 },
-  cardBody: { padding: '2rem' },
-  
-  statsRow: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '2rem', marginTop: '2rem' },
-  featureBox: { padding: '1.5rem', backgroundColor: '#f8fafc', borderRadius: '8px', textAlign: 'center', border: '1px solid #e2e8f0' },
-  fbIcon: { fontSize: '1.5rem', marginBottom: '0.5rem', filter: 'grayscale(100%) opacity(0.7)' }, // Icone desaturate per stile formale
-  fbValue: { fontSize: '1.8rem', fontWeight: '700', color: '#3b82f6', marginBottom: '0.25rem', lineHeight: '1.2' },
-  fbTitle: { fontSize: '0.7rem', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' },
+  checkbox: {
+    width: '18px',
+    height: '18px',
+    cursor: 'pointer',
+    accentColor: '#333333'
+  },
+  checkboxText: {
+    fontSize: '0.8rem',
+    color: '#666666',
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: '0.5px'
+  },
+  sliderContainer: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '1rem'
+  },
+  slider: {
+    width: '120px',
+    height: '2px',
+    appearance: 'none',
+    WebkitAppearance: 'none',
+    background: '#cccccc',
+    outline: 'none',
+    cursor: 'pointer'
+  },
+  sliderValue: {
+    fontSize: '0.85rem',
+    fontWeight: '700',
+    color: '#1a1a1a',
+    minWidth: '30px',
+    textAlign: 'right',
+    fontFamily: 'monospace'
+  },
 
-  // UTILS
-  errorBanner: { padding: '1rem', backgroundColor: '#fef2f2', border: '1px solid #fee2e2', borderRadius: '6px', color: '#991b1b', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.5rem' },
-  errorDot: { width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#ef4444' },
-  loadingContainer: { padding: '3rem', textAlign: 'center', color: '#64748b', fontSize: '0.85rem' },
-  loaderLine: { width: '40px', height: '4px', backgroundColor: '#3b82f6', margin: '0 auto 1rem auto', borderRadius: '2px' }
+  // EMPTY STATE
+  emptyState: {
+    textAlign: 'center',
+    padding: '3rem 2rem',
+    color: '#999999',
+    fontSize: '0.9rem',
+    fontWeight: '500',
+    fontStyle: 'italic',
+    backgroundColor: '#fafafa',
+    border: '1px dashed #cccccc'
+  }
 }
+
+// CSS Animation
+const globalStyles = `
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.settingsButton:hover {
+  background-color: #f5f5f5;
+  border-color: #cccccc;
+}
+
+.messageItem:hover {
+  background-color: #f5f5f5;
+}
+`
 
 export default App
