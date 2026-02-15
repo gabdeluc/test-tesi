@@ -3,7 +3,8 @@ import { useState, useEffect } from 'react'
 const API_URL = 'http://localhost:8000'
 
 // ============================================
-// CORPORATE FORMAL WIDGET BOARD
+// APPLE GRAYSCALE WIDGET BOARD
+// Eleganza Apple + Scala di Grigi
 // ============================================
 
 function App() {
@@ -12,18 +13,17 @@ function App() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
-  // Configurazione widget (con impostazioni avanzate)
+  // Configurazione widget
   const [widgetConfigs, setWidgetConfigs] = useState({
-    kpiMessages: { participant: null, showBorder: true },
-    kpiSentiment: { participant: null, showBorder: true },
-    kpiToxicity: { participant: null, showBorder: true },
-    sentimentChart: { participant: null, showLabels: true, showLegend: true },
+    kpiMessages: { participant: null, style: 'minimal' },
+    kpiSentiment: { participant: null, style: 'minimal' },
+    kpiToxicity: { participant: null, style: 'minimal' },
+    sentimentChart: { participant: null, showLabels: true, animated: true },
     toxicityGauge: { participant: null, showDetails: true },
-    messageStream: { participant: null, limit: 10, showTimestamps: true, compact: false },
+    messageStream: { participant: null, limit: 10, showTimestamps: true },
     alerts: { participant: null, threshold: 2.0, toxicityThreshold: 0.7 }
   })
 
-  // Widget settings aperto
   const [openSettings, setOpenSettings] = useState(null)
 
   useEffect(() => {
@@ -92,7 +92,7 @@ function App() {
 
   return (
     <div style={styles.appContainer}>
-      {/* HEADER - Corporate Style */}
+      {/* HEADER - Apple Style Glassmorphism */}
       <div style={styles.header}>
         <div style={styles.headerContent}>
           <div style={styles.headerLeft}>
@@ -100,8 +100,8 @@ function App() {
               <span style={styles.logoText}>MI</span>
             </div>
             <div>
-              <h1 style={styles.title}>Meeting Intelligence Platform</h1>
-              <span style={styles.subtitle}>Session MTG-001 • Real-time Analytics</span>
+              <h1 style={styles.title}>Meeting Intelligence</h1>
+              <span style={styles.subtitle}>Session MTG-001 · Real-time Analytics</span>
             </div>
           </div>
         </div>
@@ -109,24 +109,24 @@ function App() {
 
       {error && (
         <div style={styles.errorBanner}>
-          <span style={styles.errorLabel}>Error:</span>
+          <span style={styles.errorIcon}>!</span>
           <span>{error}</span>
         </div>
       )}
 
       {loading && (
         <div style={styles.loadingContainer}>
-          <div style={styles.spinner}></div>
-          <p style={styles.loadingText}>Loading analytics data...</p>
+          <div style={styles.appleSpinner}></div>
+          <p style={styles.loadingText}>Loading analytics...</p>
         </div>
       )}
 
       {!loading && meetingData && (
         <div style={styles.widgetGrid}>
           {/* KPI Cards */}
-          <FormalKPIWidget
+          <AppleKPIWidget
             widgetId="kpiMessages"
-            title="Total Messages"
+            title="Messages"
             config={widgetConfigs.kpiMessages}
             participants={participants}
             data={meetingData.transcript}
@@ -136,46 +136,46 @@ function App() {
             setOpenSettings={setOpenSettings}
           />
 
-          <FormalKPIWidget
+          <AppleKPIWidget
             widgetId="kpiSentiment"
-            title="Average Sentiment"
+            title="Sentiment"
             config={widgetConfigs.kpiSentiment}
             participants={participants}
             data={meetingData.transcript}
             onConfigChange={(config) => updateWidgetConfig('kpiSentiment', config)}
             calculateValue={(data) => {
               const stats = calculateStats(data)
-              return stats.avgSentiment.toFixed(2)
+              return stats.avgSentiment.toFixed(1)
             }}
             subtitle={(data) => {
               const stats = calculateStats(data)
-              return `${(stats.positiveRatio * 100).toFixed(0)}% positive sentiment`
+              return `${(stats.positiveRatio * 100).toFixed(0)}% positive`
             }}
             openSettings={openSettings}
             setOpenSettings={setOpenSettings}
           />
 
-          <FormalKPIWidget
+          <AppleKPIWidget
             widgetId="kpiToxicity"
-            title="Toxicity Incidents"
+            title="Toxicity"
             config={widgetConfigs.kpiToxicity}
             participants={participants}
             data={meetingData.transcript}
             onConfigChange={(config) => updateWidgetConfig('kpiToxicity', config)}
             calculateValue={(data) => {
               const stats = calculateStats(data)
-              return `${stats.toxicCount} of ${stats.totalMessages}`
+              return `${stats.toxicCount}`
             }}
             subtitle={(data) => {
               const stats = calculateStats(data)
-              return `${(stats.toxicRatio * 100).toFixed(1)}% detection rate`
+              return `${(stats.toxicRatio * 100).toFixed(0)}% detection rate`
             }}
             openSettings={openSettings}
             setOpenSettings={setOpenSettings}
           />
 
           {/* Sentiment Chart Widget */}
-          <FormalSentimentChart
+          <AppleSentimentChart
             widgetId="sentimentChart"
             config={widgetConfigs.sentimentChart}
             participants={participants}
@@ -186,7 +186,7 @@ function App() {
           />
 
           {/* Toxicity Gauge Widget */}
-          <FormalToxicityGauge
+          <AppleToxicityGauge
             widgetId="toxicityGauge"
             config={widgetConfigs.toxicityGauge}
             participants={participants}
@@ -198,7 +198,7 @@ function App() {
           />
 
           {/* Message Stream Widget */}
-          <FormalMessageStream
+          <AppleMessageStream
             widgetId="messageStream"
             config={widgetConfigs.messageStream}
             participants={participants}
@@ -214,10 +214,10 @@ function App() {
 }
 
 // ============================================
-// FORMAL KPI WIDGET
+// APPLE KPI WIDGET
 // ============================================
 
-function FormalKPIWidget({
+function AppleKPIWidget({
   widgetId,
   title,
   config,
@@ -240,10 +240,7 @@ function FormalKPIWidget({
   const subtitleText = subtitle ? subtitle(filteredData) : null
 
   return (
-    <div style={{
-      ...styles.card,
-      borderLeft: config.showBorder ? '3px solid #333333' : 'none'
-    }}>
+    <div style={styles.appleCard}>
       <div style={styles.cardHeader}>
         <div style={styles.cardTitle}>
           <span style={styles.cardTitleText}>{title}</span>
@@ -251,26 +248,28 @@ function FormalKPIWidget({
         <button
           onClick={() => setOpenSettings(openSettings === widgetId ? null : widgetId)}
           style={styles.settingsButton}
-          title="Settings"
         >
-          ⋮
+          ···
         </button>
       </div>
 
       {openSettings === widgetId && (
-        <FormalSettings
+        <AppleSettings
           config={config}
           participants={participants}
           onConfigChange={onConfigChange}
           options={[
-            { type: 'select', key: 'participant', label: 'Filter by Participant' },
-            { type: 'toggle', key: 'showBorder', label: 'Show Border Accent' }
+            { type: 'select', key: 'participant', label: 'Filter' },
+            { type: 'select', key: 'style', label: 'Style', selectOptions: [
+              { value: 'minimal', label: 'Minimal' },
+              { value: 'detailed', label: 'Detailed' }
+            ]}
           ]}
         />
       )}
 
       <div style={styles.kpiContent}>
-        <div style={styles.kpiValueContainer}>
+        <div style={styles.kpiCircle}>
           <span style={styles.kpiValue}>{value}</span>
         </div>
         {subtitleText && (
@@ -282,10 +281,10 @@ function FormalKPIWidget({
 }
 
 // ============================================
-// FORMAL SENTIMENT CHART
+// APPLE SENTIMENT CHART
 // ============================================
 
-function FormalSentimentChart({
+function AppleSentimentChart({
   widgetId,
   config,
   participants,
@@ -321,13 +320,13 @@ function FormalSentimentChart({
     percentage: total > 0 ? (count / total) * 100 : 0
   }))
 
-  // Scala di grigi (dal chiaro al scuro per rappresentare neg to pos)
+  // Scala di grigi Apple-style (elegante)
   const grayScaleMap = {
-    very_negative: '#1a1a1a',
-    negative: '#4a4a4a',
-    neutral: '#808080',
-    positive: '#b0b0b0',
-    very_positive: '#d0d0d0'
+    very_negative: '#2c2c2e',
+    negative: '#48484a',
+    neutral: '#8e8e93',
+    positive: '#aeaeb2',
+    very_positive: '#c7c7cc'
   }
 
   const labelMap = {
@@ -339,43 +338,34 @@ function FormalSentimentChart({
   }
 
   return (
-    <div style={{ ...styles.card, ...styles.wideCard }}>
+    <div style={{ ...styles.appleCard, ...styles.wideCard }}>
       <div style={styles.cardHeader}>
         <div style={styles.cardTitle}>
-          <span style={styles.cardTitleText}>Sentiment Distribution Analysis</span>
+          <span style={styles.cardTitleText}>Sentiment Distribution</span>
         </div>
         <button
           onClick={() => setOpenSettings(openSettings === widgetId ? null : widgetId)}
           style={styles.settingsButton}
-          title="Settings"
         >
-          ⋮
+          ···
         </button>
       </div>
 
       {openSettings === widgetId && (
-        <FormalSettings
+        <AppleSettings
           config={config}
           participants={participants}
           onConfigChange={onConfigChange}
           options={[
-            { type: 'select', key: 'participant', label: 'Filter by Participant' },
-            { type: 'toggle', key: 'showLabels', label: 'Display Labels' },
-            { type: 'toggle', key: 'showLegend', label: 'Display Legend' }
+            { type: 'select', key: 'participant', label: 'Filter' },
+            { type: 'toggle', key: 'showLabels', label: 'Show Labels' },
+            { type: 'toggle', key: 'animated', label: 'Animated' }
           ]}
         />
       )}
 
       <div style={styles.chartContent}>
-        {config.showLabels && (
-          <div style={styles.chartLabels}>
-            <span style={styles.chartLabelText}>Negative</span>
-            <span style={styles.chartLabelText}>Neutral</span>
-            <span style={styles.chartLabelText}>Positive</span>
-          </div>
-        )}
-
-        <div style={styles.barContainer}>
+        <div style={styles.appleBar}>
           {percentages.map(({ key, percentage }) =>
             percentage > 0 ? (
               <div
@@ -384,26 +374,25 @@ function FormalSentimentChart({
                   width: `${percentage}%`,
                   height: '100%',
                   backgroundColor: grayScaleMap[key],
-                  position: 'relative'
+                  transition: config.animated ? 'all 0.5s ease' : 'none'
                 }}
-                title={`${labelMap[key]}: ${percentage.toFixed(1)}%`}
               />
             ) : null
           )}
         </div>
 
-        {config.showLegend && (
-          <div style={styles.legend}>
+        {config.showLabels && (
+          <div style={styles.appleLegend}>
             {percentages.map(({ key, count, percentage }) => (
               <div key={key} style={styles.legendRow}>
                 <div
                   style={{
-                    ...styles.legendSquare,
+                    ...styles.legendDot,
                     backgroundColor: grayScaleMap[key]
                   }}
                 />
                 <span style={styles.legendText}>
-                  {labelMap[key]}: {count} ({percentage.toFixed(1)}%)
+                  {labelMap[key]}: {count} ({percentage.toFixed(0)}%)
                 </span>
               </div>
             ))}
@@ -415,10 +404,10 @@ function FormalSentimentChart({
 }
 
 // ============================================
-// FORMAL TOXICITY GAUGE
+// APPLE TOXICITY GAUGE
 // ============================================
 
-function FormalToxicityGauge({
+function AppleToxicityGauge({
   widgetId,
   config,
   participants,
@@ -444,122 +433,80 @@ function FormalToxicityGauge({
     return 'HIGH'
   }
 
+  // Gradiente di grigio in base al rischio
+  const getGradient = () => {
+    if (stats.avgToxicity < 0.2) return 'linear-gradient(135deg, #c7c7cc 0%, #d1d1d6 100%)'
+    if (stats.avgToxicity < 0.5) return 'linear-gradient(135deg, #8e8e93 0%, #aeaeb2 100%)'
+    return 'linear-gradient(135deg, #3a3a3c 0%, #48484a 100%)'
+  }
+
   return (
-    <div style={styles.card}>
+    <div style={styles.appleCard}>
       <div style={styles.cardHeader}>
         <div style={styles.cardTitle}>
-          <span style={styles.cardTitleText}>Toxicity Analysis</span>
+          <span style={styles.cardTitleText}>Toxicity Level</span>
         </div>
         <button
           onClick={() => setOpenSettings(openSettings === widgetId ? null : widgetId)}
           style={styles.settingsButton}
-          title="Settings"
         >
-          ⋮
+          ···
         </button>
       </div>
 
       {openSettings === widgetId && (
-        <FormalSettings
+        <AppleSettings
           config={config}
           participants={participants}
           onConfigChange={onConfigChange}
           options={[
-            { type: 'select', key: 'participant', label: 'Filter by Participant' },
-            { type: 'toggle', key: 'showDetails', label: 'Show Detailed Metrics' }
+            { type: 'select', key: 'participant', label: 'Filter' },
+            { type: 'toggle', key: 'showDetails', label: 'Show Details' }
           ]}
         />
       )}
 
       {filteredData.length > 0 ? (
         <div style={styles.gaugeContent}>
-          <div style={styles.gaugeContainer}>
-            <svg width="180" height="180" viewBox="0 0 180 180">
-              {/* Background circle */}
-              <circle
-                cx="90"
-                cy="90"
-                r="70"
-                fill="none"
-                stroke="#e5e5e5"
-                strokeWidth="12"
-              />
-              {/* Progress circle */}
-              <circle
-                cx="90"
-                cy="90"
-                r="70"
-                fill="none"
-                stroke="#333333"
-                strokeWidth="12"
-                strokeDasharray={`${(percentage / 100) * 439.8} 439.8`}
-                strokeDashoffset="0"
-                transform="rotate(-90 90 90)"
-                strokeLinecap="round"
-              />
-              {/* Center text */}
-              <text
-                x="90"
-                y="85"
-                textAnchor="middle"
-                style={{
-                  fontSize: '32px',
-                  fontWeight: '600',
-                  fill: '#1a1a1a',
-                  fontFamily: 'monospace'
-                }}
-              >
-                {percentage.toFixed(0)}%
-              </text>
-              <text
-                x="90"
-                y="105"
-                textAnchor="middle"
-                style={{
-                  fontSize: '12px',
-                  fontWeight: '600',
-                  fill: '#666666',
-                  letterSpacing: '1px'
-                }}
-              >
-                {getRiskLevel()}
-              </text>
-            </svg>
+          <div
+            style={{
+              ...styles.appleGauge,
+              background: getGradient()
+            }}
+          >
+            <div style={styles.gaugeInner}>
+              <span style={styles.gaugeValue}>{percentage.toFixed(0)}%</span>
+              <span style={styles.gaugeLabel}>{getRiskLevel()}</span>
+            </div>
           </div>
 
           {config.showDetails && (
-            <div style={styles.detailsGrid}>
-              <div style={styles.detailItem}>
-                <span style={styles.detailLabel}>Average Score</span>
+            <div style={styles.gaugeDetails}>
+              <div style={styles.detailRow}>
+                <span style={styles.detailLabel}>Average</span>
                 <span style={styles.detailValue}>{stats.avgToxicity.toFixed(3)}</span>
               </div>
-              <div style={styles.detailItem}>
-                <span style={styles.detailLabel}>Toxic Messages</span>
+              <div style={styles.detailRow}>
+                <span style={styles.detailLabel}>Toxic Count</span>
                 <span style={styles.detailValue}>
                   {stats.toxicCount} / {stats.totalMessages}
-                </span>
-              </div>
-              <div style={styles.detailItem}>
-                <span style={styles.detailLabel}>Detection Rate</span>
-                <span style={styles.detailValue}>
-                  {(stats.toxicRatio * 100).toFixed(1)}%
                 </span>
               </div>
             </div>
           )}
         </div>
       ) : (
-        <div style={styles.emptyState}>No data available for selected filter</div>
+        <div style={styles.emptyState}>No data available</div>
       )}
     </div>
   )
 }
 
 // ============================================
-// FORMAL MESSAGE STREAM
+// APPLE MESSAGE STREAM
 // ============================================
 
-function FormalMessageStream({
+function AppleMessageStream({
   widgetId,
   config,
   participants,
@@ -578,42 +525,38 @@ function FormalMessageStream({
   const displayMessages = filteredData.slice(0, config.limit || 10)
 
   return (
-    <div style={{ ...styles.card, ...styles.wideCard }}>
+    <div style={{ ...styles.appleCard, ...styles.wideCard }}>
       <div style={styles.cardHeader}>
         <div style={styles.cardTitle}>
           <span style={styles.cardTitleText}>Message Stream</span>
-          <span style={styles.cardBadge}>{displayMessages.length} messages</span>
         </div>
         <button
           onClick={() => setOpenSettings(openSettings === widgetId ? null : widgetId)}
           style={styles.settingsButton}
-          title="Settings"
         >
-          ⋮
+          ···
         </button>
       </div>
 
       {openSettings === widgetId && (
-        <FormalSettings
+        <AppleSettings
           config={config}
           participants={participants}
           onConfigChange={onConfigChange}
           options={[
-            { type: 'select', key: 'participant', label: 'Filter by Participant' },
+            { type: 'select', key: 'participant', label: 'Filter' },
             { type: 'slider', key: 'limit', label: 'Message Limit', min: 5, max: 20 },
-            { type: 'toggle', key: 'showTimestamps', label: 'Show Timestamps' },
-            { type: 'toggle', key: 'compact', label: 'Compact View' }
+            { type: 'toggle', key: 'showTimestamps', label: 'Show Timestamps' }
           ]}
         />
       )}
 
       <div style={styles.messageList}>
         {displayMessages.map((msg, idx) => (
-          <FormalMessageItem
+          <AppleMessageBubble
             key={idx}
             message={msg}
             showTimestamp={config.showTimestamps}
-            compact={config.compact}
           />
         ))}
       </div>
@@ -621,63 +564,57 @@ function FormalMessageStream({
   )
 }
 
-function FormalMessageItem({ message, showTimestamp, compact }) {
-  // Calcola intensità grigio basato su sentiment (1=scuro, 5=chiaro)
-  const sentimentGray = Math.round((message.sentiment.stars / 5) * 255)
+function AppleMessageBubble({ message, showTimestamp }) {
+  // Scala di grigi in base al sentiment
+  const sentimentGray = Math.round((message.sentiment.stars / 5) * 150) + 100
   const sentimentColor = `rgb(${sentimentGray}, ${sentimentGray}, ${sentimentGray})`
 
   return (
-    <div
-      style={{
-        ...styles.messageItem,
-        ...(compact ? styles.messageItemCompact : {}),
-        borderLeft: `3px solid ${sentimentColor}`
-      }}
-    >
-      <div style={styles.messageHeader}>
-        <span style={styles.messageAuthor}>{message.nickname}</span>
-        <div style={styles.messageMetrics}>
-          <span style={styles.metricBadge}>
-            Sentiment: {message.sentiment.stars.toFixed(1)}
+    <div style={styles.appleBubble}>
+      <div style={styles.bubbleHeader}>
+        <span style={styles.bubbleAuthor}>{message.nickname}</span>
+        <div style={styles.bubbleScores}>
+          <span
+            style={{
+              ...styles.bubbleBadge,
+              backgroundColor: sentimentColor
+            }}
+          >
+            {message.sentiment.stars.toFixed(1)}
           </span>
           {message.toxicity.is_toxic && (
-            <span style={{ ...styles.metricBadge, ...styles.metricBadgeToxic }}>
-              Toxic
-            </span>
+            <span style={styles.bubbleBadgeToxic}>Toxic</span>
           )}
         </div>
       </div>
-      <p style={styles.messageText}>{message.text}</p>
+      <p style={styles.bubbleText}>{message.text}</p>
       {showTimestamp && (
-        <span style={styles.messageTime}>{message.from}</span>
+        <span style={styles.bubbleTime}>{message.from}</span>
       )}
     </div>
   )
 }
 
 // ============================================
-// FORMAL SETTINGS PANEL
+// APPLE SETTINGS PANEL
 // ============================================
 
-function FormalSettings({ config, participants, onConfigChange, options }) {
+function AppleSettings({ config, participants, onConfigChange, options }) {
   return (
     <div style={styles.settingsPanel}>
-      <div style={styles.settingsPanelHeader}>
-        <span style={styles.settingsPanelTitle}>Widget Configuration</span>
-      </div>
       {options.map((option, idx) => (
         <div key={idx} style={styles.settingRow}>
           <span style={styles.settingLabel}>{option.label}</span>
 
-          {option.type === 'select' && (
+          {option.type === 'select' && !option.selectOptions && (
             <select
               value={config[option.key] || ''}
               onChange={(e) =>
                 onConfigChange({ [option.key]: e.target.value || null })
               }
-              style={styles.settingSelect}
+              style={styles.appleSelect}
             >
-              <option value="">All Participants</option>
+              <option value="">All</option>
               {participants.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
@@ -686,18 +623,46 @@ function FormalSettings({ config, participants, onConfigChange, options }) {
             </select>
           )}
 
+          {option.type === 'select' && option.selectOptions && (
+            <select
+              value={config[option.key] || option.selectOptions[0].value}
+              onChange={(e) =>
+                onConfigChange({ [option.key]: e.target.value })
+              }
+              style={styles.appleSelect}
+            >
+              {option.selectOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          )}
+
           {option.type === 'toggle' && (
-            <label style={styles.checkboxLabel}>
+            <label style={styles.toggleContainer}>
               <input
                 type="checkbox"
                 checked={config[option.key] || false}
                 onChange={(e) =>
                   onConfigChange({ [option.key]: e.target.checked })
                 }
-                style={styles.checkbox}
+                style={styles.toggleInput}
               />
-              <span style={styles.checkboxText}>
-                {config[option.key] ? 'Enabled' : 'Disabled'}
+              <span
+                style={{
+                  ...styles.toggleSlider,
+                  backgroundColor: config[option.key] ? '#3a3a3c' : '#d1d1d6'
+                }}
+              >
+                <span
+                  style={{
+                    ...styles.toggleThumb,
+                    transform: config[option.key]
+                      ? 'translateX(20px)'
+                      : 'translateX(2px)'
+                  }}
+                />
               </span>
             </label>
           )}
@@ -712,7 +677,7 @@ function FormalSettings({ config, participants, onConfigChange, options }) {
                 onChange={(e) =>
                   onConfigChange({ [option.key]: parseInt(e.target.value) })
                 }
-                style={styles.slider}
+                style={styles.appleSlider}
               />
               <span style={styles.sliderValue}>
                 {config[option.key] || option.min}
@@ -726,30 +691,33 @@ function FormalSettings({ config, participants, onConfigChange, options }) {
 }
 
 // ============================================
-// STYLES - FORMAL CORPORATE THEME
+// STYLES - APPLE GRAYSCALE
 // ============================================
 
 const styles = {
   appContainer: {
     minHeight: '100vh',
-    backgroundColor: '#fafafa',
-    fontFamily: '"Inter", "Helvetica Neue", Arial, sans-serif',
-    color: '#1a1a1a'
+    backgroundColor: '#f5f5f7',
+    fontFamily:
+      '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", sans-serif',
+    transition: 'background-color 0.3s ease'
   },
 
-  // HEADER
+  // HEADER - Apple Glassmorphism
   header: {
-    backgroundColor: '#ffffff',
-    borderBottom: '1px solid #e0e0e0',
     position: 'sticky',
     top: 0,
     zIndex: 100,
-    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)'
+    backgroundColor: 'rgba(255, 255, 255, 0.72)',
+    backdropFilter: 'blur(20px)',
+    WebkitBackdropFilter: 'blur(20px)',
+    borderBottom: '0.5px solid rgba(0, 0, 0, 0.1)',
+    transition: 'all 0.3s ease'
   },
   headerContent: {
     maxWidth: '1400px',
     margin: '0 auto',
-    padding: '1.25rem 2rem',
+    padding: '1rem 2rem',
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center'
@@ -762,50 +730,54 @@ const styles = {
   logoContainer: {
     width: '48px',
     height: '48px',
-    backgroundColor: '#1a1a1a',
+    borderRadius: '12px',
+    background: 'linear-gradient(135deg, #2c2c2e 0%, #48484a 100%)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    border: '2px solid #333333'
+    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)'
   },
   logoText: {
     color: '#ffffff',
     fontSize: '1.2rem',
     fontWeight: '700',
-    letterSpacing: '1px',
-    fontFamily: 'monospace'
+    letterSpacing: '1px'
   },
   title: {
     margin: 0,
     fontSize: '1.25rem',
     fontWeight: '600',
-    color: '#1a1a1a',
-    letterSpacing: '-0.01em'
+    color: '#1d1d1f',
+    letterSpacing: '-0.02em'
   },
   subtitle: {
     fontSize: '0.8rem',
-    color: '#666666',
-    fontWeight: '400',
-    letterSpacing: '0.02em'
+    color: '#6e6e73',
+    fontWeight: '400'
   },
 
   // ERROR & LOADING
   errorBanner: {
     padding: '1rem 2rem',
     margin: '1rem 2rem',
-    backgroundColor: '#f5f5f5',
-    border: '1px solid #cccccc',
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+    borderRadius: '12px',
     display: 'flex',
     alignItems: 'center',
     gap: '0.75rem',
     fontSize: '0.9rem',
-    color: '#333333'
+    color: '#1d1d1f'
   },
-  errorLabel: {
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    fontSize: '0.75rem',
-    letterSpacing: '0.5px'
+  errorIcon: {
+    width: '24px',
+    height: '24px',
+    borderRadius: '12px',
+    backgroundColor: '#2c2c2e',
+    color: 'white',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontWeight: '700'
   },
   loadingContainer: {
     display: 'flex',
@@ -815,19 +787,18 @@ const styles = {
     minHeight: '60vh',
     gap: '1.5rem'
   },
-  spinner: {
-    width: '40px',
-    height: '40px',
-    border: '3px solid #e0e0e0',
-    borderTop: '3px solid #333333',
+  appleSpinner: {
+    width: '50px',
+    height: '50px',
+    border: '4px solid #d1d1d6',
+    borderTop: '4px solid #2c2c2e',
     borderRadius: '50%',
     animation: 'spin 1s linear infinite'
   },
   loadingText: {
-    fontSize: '0.9rem',
-    color: '#666666',
+    fontSize: '0.95rem',
     fontWeight: '500',
-    letterSpacing: '0.02em'
+    color: '#6e6e73'
   },
 
   // WIDGET GRID
@@ -840,13 +811,16 @@ const styles = {
     gap: '1.5rem'
   },
 
-  // CARD
-  card: {
-    backgroundColor: '#ffffff',
-    border: '1px solid #e0e0e0',
+  // APPLE CARD - Glassmorphism
+  appleCard: {
+    borderRadius: '20px',
     padding: '1.5rem',
-    transition: 'box-shadow 0.2s ease',
-    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)'
+    backgroundColor: 'rgba(255, 255, 255, 0.72)',
+    backdropFilter: 'blur(20px)',
+    WebkitBackdropFilter: 'blur(20px)',
+    border: '0.5px solid rgba(0, 0, 0, 0.05)',
+    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.08)',
+    transition: 'transform 0.3s ease, box-shadow 0.3s ease'
   },
   wideCard: {
     gridColumn: 'span 2'
@@ -857,70 +831,62 @@ const styles = {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: '1.25rem',
-    paddingBottom: '0.75rem',
-    borderBottom: '1px solid #f0f0f0'
+    marginBottom: '1.25rem'
   },
   cardTitle: {
     display: 'flex',
     alignItems: 'center',
-    gap: '0.75rem',
-    flex: 1
+    gap: '0.75rem'
   },
   cardTitleText: {
-    fontSize: '0.95rem',
+    fontSize: '1.1rem',
     fontWeight: '600',
-    color: '#1a1a1a',
-    letterSpacing: '0.01em',
-    textTransform: 'uppercase',
-    fontSize: '0.8rem'
-  },
-  cardBadge: {
-    fontSize: '0.7rem',
-    color: '#666666',
-    backgroundColor: '#f5f5f5',
-    padding: '0.25rem 0.6rem',
-    fontWeight: '500',
-    letterSpacing: '0.02em'
+    color: '#1d1d1f',
+    letterSpacing: '-0.01em'
   },
   settingsButton: {
     width: '32px',
     height: '32px',
-    backgroundColor: 'transparent',
-    border: '1px solid #e0e0e0',
+    borderRadius: '8px',
+    border: 'none',
     fontSize: '1.2rem',
-    color: '#666666',
     cursor: 'pointer',
-    transition: 'all 0.2s ease',
-    fontWeight: '700'
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+    color: '#6e6e73',
+    fontWeight: '700',
+    letterSpacing: '1px',
+    transition: 'transform 0.2s ease, background-color 0.2s ease'
   },
 
   // KPI CONTENT
   kpiContent: {
     display: 'flex',
     flexDirection: 'column',
+    alignItems: 'center',
     gap: '1rem',
-    padding: '1.5rem 0'
+    padding: '1rem 0'
   },
-  kpiValueContainer: {
-    textAlign: 'center',
-    padding: '2rem',
-    backgroundColor: '#fafafa',
-    border: '2px solid #e0e0e0'
+  kpiCircle: {
+    width: '120px',
+    height: '120px',
+    borderRadius: '60px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: 'linear-gradient(135deg, #2c2c2e 0%, #48484a 100%)',
+    boxShadow: '0 8px 24px rgba(0, 0, 0, 0.15)'
   },
   kpiValue: {
-    fontSize: '3rem',
-    fontWeight: '300',
-    color: '#1a1a1a',
-    fontFamily: 'monospace',
-    letterSpacing: '-0.02em'
+    fontSize: '2.5rem',
+    fontWeight: '700',
+    color: 'white',
+    textShadow: '0 2px 4px rgba(0, 0, 0, 0.2)'
   },
   kpiSubtitle: {
-    fontSize: '0.85rem',
-    color: '#666666',
-    textAlign: 'center',
+    fontSize: '0.9rem',
     fontWeight: '500',
-    letterSpacing: '0.02em'
+    color: '#6e6e73',
+    textAlign: 'center'
   },
 
   // CHART
@@ -929,44 +895,32 @@ const styles = {
     flexDirection: 'column',
     gap: '1.5rem'
   },
-  chartLabels: {
+  appleBar: {
     display: 'flex',
-    justifyContent: 'space-between',
-    fontSize: '0.75rem',
-    color: '#666666',
-    textTransform: 'uppercase',
-    letterSpacing: '0.5px',
-    fontWeight: '600'
+    height: '24px',
+    borderRadius: '12px',
+    overflow: 'hidden',
+    boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.1)'
   },
-  chartLabelText: {
-    fontSize: '0.7rem'
-  },
-  barContainer: {
-    display: 'flex',
-    height: '32px',
-    border: '1px solid #e0e0e0',
-    overflow: 'hidden'
-  },
-  legend: {
+  appleLegend: {
     display: 'grid',
     gridTemplateColumns: 'repeat(2, 1fr)',
-    gap: '0.75rem',
-    marginTop: '0.5rem'
+    gap: '0.75rem'
   },
   legendRow: {
     display: 'flex',
     alignItems: 'center',
     gap: '0.5rem'
   },
-  legendSquare: {
-    width: '14px',
-    height: '14px',
-    border: '1px solid #cccccc'
+  legendDot: {
+    width: '12px',
+    height: '12px',
+    borderRadius: '6px'
   },
   legendText: {
-    fontSize: '0.8rem',
-    color: '#666666',
-    fontWeight: '500'
+    fontSize: '0.85rem',
+    fontWeight: '500',
+    color: '#6e6e73'
   },
 
   // GAUGE
@@ -974,40 +928,64 @@ const styles = {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    gap: '2rem',
+    gap: '1.5rem',
     padding: '1rem 0'
   },
-  gaugeContainer: {
+  appleGauge: {
+    width: '160px',
+    height: '160px',
+    borderRadius: '80px',
     display: 'flex',
-    justifyContent: 'center'
+    alignItems: 'center',
+    justifyContent: 'center',
+    boxShadow: '0 8px 24px rgba(0, 0, 0, 0.15)'
   },
-  detailsGrid: {
-    width: '100%',
-    display: 'grid',
-    gridTemplateColumns: 'repeat(3, 1fr)',
-    gap: '1rem'
-  },
-  detailItem: {
+  gaugeInner: {
+    width: '120px',
+    height: '120px',
+    borderRadius: '60px',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    backdropFilter: 'blur(20px)',
     display: 'flex',
     flexDirection: 'column',
-    gap: '0.25rem',
-    padding: '1rem',
-    backgroundColor: '#fafafa',
-    border: '1px solid #e0e0e0',
-    textAlign: 'center'
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '0.25rem'
+  },
+  gaugeValue: {
+    fontSize: '2rem',
+    fontWeight: '700',
+    color: '#1d1d1f'
+  },
+  gaugeLabel: {
+    fontSize: '0.7rem',
+    fontWeight: '600',
+    color: '#6e6e73',
+    letterSpacing: '0.5px'
+  },
+  gaugeDetails: {
+    width: '100%',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.75rem'
+  },
+  detailRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '0.75rem',
+    borderRadius: '10px',
+    backgroundColor: 'rgba(0, 0, 0, 0.03)'
   },
   detailLabel: {
-    fontSize: '0.7rem',
-    color: '#666666',
-    textTransform: 'uppercase',
-    letterSpacing: '0.5px',
-    fontWeight: '600'
+    fontSize: '0.85rem',
+    fontWeight: '500',
+    color: '#6e6e73'
   },
   detailValue: {
-    fontSize: '1.1rem',
-    color: '#1a1a1a',
+    fontSize: '0.95rem',
     fontWeight: '600',
-    fontFamily: 'monospace'
+    color: '#1d1d1f'
   },
 
   // MESSAGES
@@ -1018,161 +996,160 @@ const styles = {
     maxHeight: '500px',
     overflowY: 'auto'
   },
-  messageItem: {
+  appleBubble: {
     padding: '1rem',
-    backgroundColor: '#fafafa',
-    border: '1px solid #e0e0e0',
-    borderLeft: '3px solid #666666',
-    transition: 'background-color 0.2s ease'
+    borderRadius: '16px',
+    backgroundColor: 'rgba(0, 0, 0, 0.03)',
+    transition: 'transform 0.2s ease'
   },
-  messageItemCompact: {
-    padding: '0.75rem'
-  },
-  messageHeader: {
+  bubbleHeader: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: '0.5rem'
   },
-  messageAuthor: {
-    fontSize: '0.85rem',
+  bubbleAuthor: {
+    fontSize: '0.9rem',
     fontWeight: '600',
-    color: '#1a1a1a',
-    textTransform: 'uppercase',
-    letterSpacing: '0.5px'
+    color: '#1d1d1f'
   },
-  messageMetrics: {
+  bubbleScores: {
     display: 'flex',
     gap: '0.5rem'
   },
-  metricBadge: {
+  bubbleBadge: {
     fontSize: '0.7rem',
-    color: '#666666',
-    backgroundColor: '#ffffff',
-    padding: '0.25rem 0.6rem',
-    border: '1px solid #e0e0e0',
     fontWeight: '600',
-    letterSpacing: '0.02em'
+    padding: '0.25rem 0.6rem',
+    borderRadius: '8px',
+    color: '#1d1d1f'
   },
-  metricBadgeToxic: {
-    color: '#1a1a1a',
-    borderColor: '#333333',
-    fontWeight: '700'
+  bubbleBadgeToxic: {
+    fontSize: '0.7rem',
+    fontWeight: '600',
+    color: '#1d1d1f',
+    backgroundColor: 'rgba(0, 0, 0, 0.15)',
+    padding: '0.25rem 0.6rem',
+    borderRadius: '8px'
   },
-  messageText: {
+  bubbleText: {
     margin: 0,
     fontSize: '0.9rem',
-    lineHeight: '1.6',
-    color: '#333333'
+    lineHeight: '1.5',
+    color: '#1d1d1f'
   },
-  messageTime: {
+  bubbleTime: {
     display: 'block',
     marginTop: '0.5rem',
     fontSize: '0.75rem',
-    color: '#999999',
-    fontFamily: 'monospace'
+    fontWeight: '500',
+    color: '#86868b'
   },
 
   // SETTINGS PANEL
   settingsPanel: {
     marginTop: '1rem',
     padding: '1rem',
-    backgroundColor: '#f5f5f5',
-    border: '1px solid #e0e0e0',
+    borderRadius: '12px',
+    backgroundColor: 'rgba(0, 0, 0, 0.03)',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.75rem',
     animation: 'slideDown 0.3s ease'
-  },
-  settingsPanelHeader: {
-    marginBottom: '1rem',
-    paddingBottom: '0.75rem',
-    borderBottom: '1px solid #cccccc'
-  },
-  settingsPanelTitle: {
-    fontSize: '0.75rem',
-    fontWeight: '700',
-    color: '#1a1a1a',
-    textTransform: 'uppercase',
-    letterSpacing: '1px'
   },
   settingRow: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: '0.75rem 0',
-    borderBottom: '1px solid #e0e0e0'
+    padding: '0.5rem 0'
   },
   settingLabel: {
-    fontSize: '0.85rem',
-    color: '#333333',
-    fontWeight: '500'
+    fontSize: '0.9rem',
+    fontWeight: '500',
+    color: '#1d1d1f'
   },
 
-  // FORM CONTROLS
-  settingSelect: {
+  // APPLE SELECT
+  appleSelect: {
     padding: '0.5rem 0.75rem',
     fontSize: '0.85rem',
-    backgroundColor: '#ffffff',
-    border: '1px solid #cccccc',
-    color: '#1a1a1a',
+    borderRadius: '8px',
+    border: '1px solid rgba(0, 0, 0, 0.1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    color: '#1d1d1f',
+    outline: 'none',
     fontWeight: '500',
     cursor: 'pointer',
-    minWidth: '150px'
+    minWidth: '120px'
   },
-  checkboxLabel: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.5rem',
+
+  // TOGGLE SWITCH - iOS Style Grayscale
+  toggleContainer: {
+    position: 'relative',
+    display: 'inline-block',
+    width: '50px',
+    height: '28px',
     cursor: 'pointer'
   },
-  checkbox: {
-    width: '18px',
-    height: '18px',
-    cursor: 'pointer',
-    accentColor: '#333333'
+  toggleInput: {
+    opacity: 0,
+    width: 0,
+    height: 0
   },
-  checkboxText: {
-    fontSize: '0.8rem',
-    color: '#666666',
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: '0.5px'
+  toggleSlider: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: '14px',
+    transition: 'background-color 0.3s ease'
   },
+  toggleThumb: {
+    position: 'absolute',
+    top: '2px',
+    width: '24px',
+    height: '24px',
+    backgroundColor: 'white',
+    borderRadius: '12px',
+    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
+    transition: 'transform 0.3s ease'
+  },
+
+  // SLIDER
   sliderContainer: {
     display: 'flex',
     alignItems: 'center',
-    gap: '1rem'
+    gap: '0.75rem'
   },
-  slider: {
+  appleSlider: {
     width: '120px',
-    height: '2px',
+    height: '4px',
+    borderRadius: '2px',
+    outline: 'none',
     appearance: 'none',
     WebkitAppearance: 'none',
-    background: '#cccccc',
-    outline: 'none',
-    cursor: 'pointer'
+    background: 'linear-gradient(to right, #2c2c2e 0%, #2c2c2e 50%, #d1d1d6 50%, #d1d1d6 100%)'
   },
   sliderValue: {
     fontSize: '0.85rem',
-    fontWeight: '700',
-    color: '#1a1a1a',
+    fontWeight: '600',
+    color: '#1d1d1f',
     minWidth: '30px',
-    textAlign: 'right',
-    fontFamily: 'monospace'
+    textAlign: 'right'
   },
 
   // EMPTY STATE
   emptyState: {
     textAlign: 'center',
-    padding: '3rem 2rem',
-    color: '#999999',
+    padding: '2rem',
+    color: '#6e6e73',
     fontSize: '0.9rem',
-    fontWeight: '500',
-    fontStyle: 'italic',
-    backgroundColor: '#fafafa',
-    border: '1px dashed #cccccc'
+    fontWeight: '500'
   }
 }
 
-// CSS Animation
+// CSS Animations
 const globalStyles = `
 @keyframes spin {
   to { transform: rotate(360deg); }
@@ -1189,17 +1166,18 @@ const globalStyles = `
   }
 }
 
-.card:hover {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+.appleCard:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.12);
 }
 
 .settingsButton:hover {
-  background-color: #f5f5f5;
-  border-color: #cccccc;
+  transform: scale(1.1);
+  background-color: rgba(0, 0, 0, 0.1);
 }
 
-.messageItem:hover {
-  background-color: #f5f5f5;
+.settingsButton:active {
+  transform: scale(0.95);
 }
 `
 
