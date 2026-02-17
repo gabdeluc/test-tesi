@@ -3,8 +3,8 @@ import { useState, useEffect } from 'react'
 const API_URL = 'http://localhost:8000'
 
 // ============================================
-// APPLE GRAYSCALE WIDGET BOARD
-// Eleganza Apple + Scala di Grigi
+// iOS MODERN WIDGET BOARD - CUSTOMIZABLE
+// Ogni widget personalizzabile singolarmente
 // ============================================
 
 function App() {
@@ -13,17 +13,43 @@ function App() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
-  // Configurazione widget
+  // Configurazioni per ogni widget (stile iOS)
   const [widgetConfigs, setWidgetConfigs] = useState({
-    kpiMessages: { participant: null, style: 'minimal' },
-    kpiSentiment: { participant: null, style: 'minimal' },
-    kpiToxicity: { participant: null, style: 'minimal' },
-    sentimentChart: { participant: null, showLabels: true, animated: true },
-    toxicityGauge: { participant: null, showDetails: true },
-    messageStream: { participant: null, limit: 10, showTimestamps: true },
-    alerts: { participant: null, threshold: 2.0, toxicityThreshold: 0.7 }
+    messages: {
+      participantFilter: null,
+      color: '#FF3B30',
+      showDetails: true
+    },
+    sentiment: {
+      participantFilter: null,
+      color: '#34C759',
+      showDetails: true
+    },
+    toxicity: {
+      participantFilter: null,
+      color: '#FF9500',
+      showDetails: true
+    },
+    sentimentDist: {
+      participantFilter: null,
+      color: '#007AFF',
+      showLabels: true,
+      animated: true
+    },
+    toxicityGauge: {
+      participantFilter: null,
+      color: '#5856D6',
+      showDetails: true
+    },
+    messageStream: {
+      participantFilter: null,
+      color: '#FF2D55',
+      limit: 8,
+      showTimestamps: true
+    }
   })
 
+  // Menu aperto (quale widget sta mostrando settings)
   const [openSettings, setOpenSettings] = useState(null)
 
   useEffect(() => {
@@ -48,60 +74,105 @@ function App() {
     }
   }
 
-  const updateWidgetConfig = (widgetId, config) => {
+  // Update config per un widget specifico
+  const updateWidgetConfig = (widgetId, updates) => {
     setWidgetConfigs(prev => ({
       ...prev,
-      [widgetId]: { ...prev[widgetId], ...config }
+      [widgetId]: { ...prev[widgetId], ...updates }
     }))
   }
 
-  const calculateStats = (filteredTranscript) => {
-    if (!filteredTranscript || filteredTranscript.length === 0) {
+  // Funzione per filtrare transcript in base al widget config
+  const getFilteredTranscript = (widgetId) => {
+    if (!meetingData) return []
+    
+    const config = widgetConfigs[widgetId]
+    if (!config.participantFilter) {
+      return meetingData.transcript
+    }
+
+    const participant = participants.find(p => p.id === config.participantFilter)
+    if (!participant) return meetingData.transcript
+
+    return meetingData.transcript.filter(entry => 
+      entry.nickname === participant.name
+    )
+  }
+
+  // Calcola stats da transcript filtrato
+  const calculateStats = (transcript) => {
+    if (!transcript || transcript.length === 0) {
       return {
-        totalMessages: 0,
-        avgSentiment: 0,
-        positiveRatio: 0,
-        toxicCount: 0,
-        toxicRatio: 0,
-        avgToxicity: 0
+        total_messages: 0,
+        sentiment: {
+          distribution: { positive: 0, neutral: 0, negative: 0 },
+          average_score: 0,
+          positive_ratio: 0
+        },
+        toxicity: {
+          toxic_count: 0,
+          toxic_ratio: 0,
+          severity_distribution: { low: 0, medium: 0, high: 0 },
+          average_toxicity_score: 0
+        }
       }
     }
 
-    const totalMessages = filteredTranscript.length
-    let totalStars = 0
-    let positiveCount = 0
-    let toxicCount = 0
-    let totalToxicity = 0
+    const total = transcript.length
+    let sentimentScoreSum = 0
+    let toxicityScoreSum = 0
 
-    filteredTranscript.forEach(entry => {
-      totalStars += entry.sentiment.stars
-      if (entry.sentiment.stars >= 3.5) positiveCount++
-      if (entry.toxicity.is_toxic) toxicCount++
-      totalToxicity += entry.toxicity.toxicity_score
+    const sentimentDist = { positive: 0, neutral: 0, negative: 0 }
+    const severityDist = { low: 0, medium: 0, high: 0 }
+    let toxicCount = 0
+
+    transcript.forEach(entry => {
+      // Sentiment
+      const sentLabel = entry.sentiment.label
+      if (sentimentDist[sentLabel] !== undefined) {
+        sentimentDist[sentLabel]++
+      }
+      sentimentScoreSum += entry.sentiment.score
+
+      // Toxicity - NUOVO FORMATO
+      if (entry.toxicity.is_toxic) {
+        toxicCount++
+      }
+      
+      const severity = entry.toxicity.severity
+      if (severityDist[severity] !== undefined) {
+        severityDist[severity]++
+      }
+      
+      toxicityScoreSum += entry.toxicity.toxicity_score
     })
 
     return {
-      totalMessages,
-      avgSentiment: totalStars / totalMessages,
-      positiveRatio: positiveCount / totalMessages,
-      toxicCount,
-      toxicRatio: toxicCount / totalMessages,
-      avgToxicity: totalToxicity / totalMessages
+      total_messages: total,
+      sentiment: {
+        distribution: sentimentDist,
+        average_score: sentimentScoreSum / total,
+        positive_ratio: sentimentDist.positive / total
+      },
+      toxicity: {
+        toxic_count: toxicCount,
+        toxic_ratio: toxicCount / total,
+        severity_distribution: severityDist,
+        average_toxicity_score: toxicityScoreSum / total
+      }
     }
   }
 
   return (
     <div style={styles.appContainer}>
-      {/* HEADER - Apple Style Glassmorphism */}
+      {/* HEADER - iOS Style */}
       <div style={styles.header}>
         <div style={styles.headerContent}>
           <div style={styles.headerLeft}>
-            <div style={styles.logoContainer}>
-              <span style={styles.logoText}>MI</span>
-            </div>
+            <div style={styles.logoCircle}>MI</div>
             <div>
               <h1 style={styles.title}>Meeting Intelligence</h1>
-              <span style={styles.subtitle}>Session MTG-001 · Real-time Analytics</span>
+              <p style={styles.subtitle}>Session MTG-001 · Real-time Analytics</p>
             </div>
           </div>
         </div>
@@ -116,96 +187,331 @@ function App() {
 
       {loading && (
         <div style={styles.loadingContainer}>
-          <div style={styles.appleSpinner}></div>
+          <div style={styles.spinner}></div>
           <p style={styles.loadingText}>Loading analytics...</p>
         </div>
       )}
 
       {!loading && meetingData && (
         <div style={styles.widgetGrid}>
-          {/* KPI Cards */}
-          <AppleKPIWidget
-            widgetId="kpiMessages"
+          {/* KPI Widget - Messages */}
+          <CustomizableWidget
+            widgetId="messages"
             title="Messages"
-            config={widgetConfigs.kpiMessages}
+            config={widgetConfigs.messages}
             participants={participants}
-            data={meetingData.transcript}
-            onConfigChange={(config) => updateWidgetConfig('kpiMessages', config)}
-            calculateValue={(data) => data.length}
+            onConfigChange={(updates) => updateWidgetConfig('messages', updates)}
             openSettings={openSettings}
             setOpenSettings={setOpenSettings}
-          />
+          >
+            {(() => {
+              const data = getFilteredTranscript('messages')
+              return (
+                <>
+                  <div style={styles.kpiValue}>{data.length}</div>
+                  <div style={styles.kpiLabel}>Total messages</div>
+                </>
+              )
+            })()}
+          </CustomizableWidget>
 
-          <AppleKPIWidget
-            widgetId="kpiSentiment"
+          {/* KPI Widget - Sentiment */}
+          <CustomizableWidget
+            widgetId="sentiment"
             title="Sentiment"
-            config={widgetConfigs.kpiSentiment}
+            config={widgetConfigs.sentiment}
             participants={participants}
-            data={meetingData.transcript}
-            onConfigChange={(config) => updateWidgetConfig('kpiSentiment', config)}
-            calculateValue={(data) => {
-              const stats = calculateStats(data)
-              return stats.avgSentiment.toFixed(1)
-            }}
-            subtitle={(data) => {
-              const stats = calculateStats(data)
-              return `${(stats.positiveRatio * 100).toFixed(0)}% positive`
-            }}
+            onConfigChange={(updates) => updateWidgetConfig('sentiment', updates)}
             openSettings={openSettings}
             setOpenSettings={setOpenSettings}
-          />
+          >
+            {(() => {
+              const data = getFilteredTranscript('sentiment')
+              const stats = calculateStats(data)
+              return (
+                <>
+                  <div style={styles.kpiValue}>
+                    {(stats.sentiment.average_score * 100).toFixed(0)}%
+                  </div>
+                  <div style={styles.kpiLabel}>
+                    {(stats.sentiment.positive_ratio * 100).toFixed(0)}% positive
+                  </div>
+                </>
+              )
+            })()}
+          </CustomizableWidget>
 
-          <AppleKPIWidget
-            widgetId="kpiToxicity"
+          {/* KPI Widget - Toxicity */}
+          <CustomizableWidget
+            widgetId="toxicity"
             title="Toxicity"
-            config={widgetConfigs.kpiToxicity}
+            config={widgetConfigs.toxicity}
             participants={participants}
-            data={meetingData.transcript}
-            onConfigChange={(config) => updateWidgetConfig('kpiToxicity', config)}
-            calculateValue={(data) => {
-              const stats = calculateStats(data)
-              return `${stats.toxicCount}`
-            }}
-            subtitle={(data) => {
-              const stats = calculateStats(data)
-              return `${(stats.toxicRatio * 100).toFixed(0)}% detection rate`
-            }}
+            onConfigChange={(updates) => updateWidgetConfig('toxicity', updates)}
             openSettings={openSettings}
             setOpenSettings={setOpenSettings}
-          />
+          >
+            {(() => {
+              const data = getFilteredTranscript('toxicity')
+              const stats = calculateStats(data)
+              return (
+                <>
+                  <div style={styles.kpiValue}>
+                    {stats.toxicity.toxic_count}
+                  </div>
+                  <div style={styles.kpiLabel}>
+                    {(stats.toxicity.toxic_ratio * 100).toFixed(0)}% toxic rate
+                  </div>
+                </>
+              )
+            })()}
+          </CustomizableWidget>
 
-          {/* Sentiment Chart Widget */}
-          <AppleSentimentChart
-            widgetId="sentimentChart"
-            config={widgetConfigs.sentimentChart}
+          {/* Sentiment Distribution - Wide */}
+          <CustomizableWidget
+            widgetId="sentimentDist"
+            title="Sentiment Distribution"
+            config={widgetConfigs.sentimentDist}
             participants={participants}
-            data={meetingData.transcript}
-            onConfigChange={(config) => updateWidgetConfig('sentimentChart', config)}
+            onConfigChange={(updates) => updateWidgetConfig('sentimentDist', updates)}
             openSettings={openSettings}
             setOpenSettings={setOpenSettings}
-          />
+            wide
+          >
+            {(() => {
+              const data = getFilteredTranscript('sentimentDist')
+              const stats = calculateStats(data)
+              return (
+                <SentimentDistribution
+                  data={stats.sentiment.distribution}
+                  config={widgetConfigs.sentimentDist}
+                />
+              )
+            })()}
+          </CustomizableWidget>
 
-          {/* Toxicity Gauge Widget */}
-          <AppleToxicityGauge
+          {/* Toxicity Gauge */}
+          <CustomizableWidget
             widgetId="toxicityGauge"
+            title="Toxicity Level"
             config={widgetConfigs.toxicityGauge}
             participants={participants}
-            data={meetingData.transcript}
-            calculateStats={calculateStats}
-            onConfigChange={(config) => updateWidgetConfig('toxicityGauge', config)}
+            onConfigChange={(updates) => updateWidgetConfig('toxicityGauge', updates)}
             openSettings={openSettings}
             setOpenSettings={setOpenSettings}
-          />
+          >
+            {(() => {
+              const data = getFilteredTranscript('toxicityGauge')
+              const stats = calculateStats(data)
+              return (
+                <ToxicityGauge
+                  score={stats.toxicity.average_toxicity_score}
+                  config={widgetConfigs.toxicityGauge}
+                />
+              )
+            })()}
+          </CustomizableWidget>
 
-          {/* Message Stream Widget */}
-          <AppleMessageStream
+          {/* Message Stream - Wide */}
+          <CustomizableWidget
             widgetId="messageStream"
+            title="Message Stream"
             config={widgetConfigs.messageStream}
             participants={participants}
-            data={meetingData.transcript}
-            onConfigChange={(config) => updateWidgetConfig('messageStream', config)}
+            onConfigChange={(updates) => updateWidgetConfig('messageStream', updates)}
             openSettings={openSettings}
             setOpenSettings={setOpenSettings}
+            wide
+          >
+            {(() => {
+              const data = getFilteredTranscript('messageStream')
+              return (
+                <MessageStream
+                  messages={data.slice(0, widgetConfigs.messageStream.limit)}
+                  config={widgetConfigs.messageStream}
+                />
+              )
+            })()}
+          </CustomizableWidget>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ============================================
+// CUSTOMIZABLE WIDGET (iOS Style)
+// ============================================
+
+function CustomizableWidget({
+  widgetId,
+  title,
+  children,
+  config,
+  participants,
+  onConfigChange,
+  openSettings,
+  setOpenSettings,
+  wide
+}) {
+  const isOpen = openSettings === widgetId
+
+  const toggleSettings = () => {
+    setOpenSettings(isOpen ? null : widgetId)
+  }
+
+  return (
+    <div style={{ ...styles.iosWidget, ...(wide && styles.wideWidget) }}>
+      <div style={styles.widgetHeader}>
+        <span style={styles.widgetTitle}>{title}</span>
+        <div style={styles.headerActions}>
+          <div style={{ ...styles.widgetDot, backgroundColor: config.color }} />
+          <button onClick={toggleSettings} style={styles.settingsButton}>
+            {isOpen ? '✕' : '⋯'}
+          </button>
+        </div>
+      </div>
+
+      {isOpen && (
+        <WidgetSettings
+          config={config}
+          participants={participants}
+          onConfigChange={onConfigChange}
+        />
+      )}
+
+      <div style={styles.widgetContent}>{children}</div>
+    </div>
+  )
+}
+
+// ============================================
+// WIDGET SETTINGS PANEL (iOS Style)
+// ============================================
+
+function WidgetSettings({ config, participants, onConfigChange }) {
+  return (
+    <div style={styles.settingsPanel}>
+      {/* Filtro Partecipante */}
+      <div style={styles.settingRow}>
+        <span style={styles.settingLabel}>Filter</span>
+        <select
+          value={config.participantFilter || ''}
+          onChange={(e) =>
+            onConfigChange({ participantFilter: e.target.value || null })
+          }
+          style={styles.settingSelect}
+        >
+          <option value="">All</option>
+          {participants.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Opzioni specifiche */}
+      {config.showDetails !== undefined && (
+        <div style={styles.settingRow}>
+          <span style={styles.settingLabel}>Show Details</span>
+          <label style={styles.toggleSwitch}>
+            <input
+              type="checkbox"
+              checked={config.showDetails}
+              onChange={(e) =>
+                onConfigChange({ showDetails: e.target.checked })
+              }
+              style={styles.toggleInput}
+            />
+            <span
+              style={{
+                ...styles.toggleSlider,
+                backgroundColor: config.showDetails ? config.color : '#3a3a3c'
+              }}
+            />
+          </label>
+        </div>
+      )}
+
+      {config.showLabels !== undefined && (
+        <div style={styles.settingRow}>
+          <span style={styles.settingLabel}>Show Labels</span>
+          <label style={styles.toggleSwitch}>
+            <input
+              type="checkbox"
+              checked={config.showLabels}
+              onChange={(e) =>
+                onConfigChange({ showLabels: e.target.checked })
+              }
+              style={styles.toggleInput}
+            />
+            <span
+              style={{
+                ...styles.toggleSlider,
+                backgroundColor: config.showLabels ? config.color : '#3a3a3c'
+              }}
+            />
+          </label>
+        </div>
+      )}
+
+      {config.animated !== undefined && (
+        <div style={styles.settingRow}>
+          <span style={styles.settingLabel}>Animated</span>
+          <label style={styles.toggleSwitch}>
+            <input
+              type="checkbox"
+              checked={config.animated}
+              onChange={(e) =>
+                onConfigChange({ animated: e.target.checked })
+              }
+              style={styles.toggleInput}
+            />
+            <span
+              style={{
+                ...styles.toggleSlider,
+                backgroundColor: config.animated ? config.color : '#3a3a3c'
+              }}
+            />
+          </label>
+        </div>
+      )}
+
+      {config.showTimestamps !== undefined && (
+        <div style={styles.settingRow}>
+          <span style={styles.settingLabel}>Timestamps</span>
+          <label style={styles.toggleSwitch}>
+            <input
+              type="checkbox"
+              checked={config.showTimestamps}
+              onChange={(e) =>
+                onConfigChange({ showTimestamps: e.target.checked })
+              }
+              style={styles.toggleInput}
+            />
+            <span
+              style={{
+                ...styles.toggleSlider,
+                backgroundColor: config.showTimestamps ? config.color : '#3a3a3c'
+              }}
+            />
+          </label>
+        </div>
+      )}
+
+      {config.limit !== undefined && (
+        <div style={styles.settingRow}>
+          <span style={styles.settingLabel}>Message Limit</span>
+          <input
+            type="number"
+            min="3"
+            max="20"
+            value={config.limit}
+            onChange={(e) =>
+              onConfigChange({ limit: parseInt(e.target.value) })
+            }
+            style={styles.numberInput}
           />
         </div>
       )}
@@ -214,381 +520,169 @@ function App() {
 }
 
 // ============================================
-// APPLE KPI WIDGET
+// SENTIMENT DISTRIBUTION CHART
 // ============================================
 
-function AppleKPIWidget({
-  widgetId,
-  title,
-  config,
-  participants,
-  data,
-  onConfigChange,
-  calculateValue,
-  subtitle,
-  openSettings,
-  setOpenSettings
-}) {
-  const filteredData = config.participant
-    ? data.filter(entry => {
-        const participant = participants.find(p => p.id === config.participant)
-        return entry.nickname === participant?.name
-      })
-    : data
+function SentimentDistribution({ data, config }) {
+  const total = (data.positive || 0) + (data.neutral || 0) + (data.negative || 0)
+  
+  if (total === 0) {
+    return <div style={styles.emptyState}>No data</div>
+  }
 
-  const value = calculateValue(filteredData)
-  const subtitleText = subtitle ? subtitle(filteredData) : null
+  const items = [
+    { label: 'Positive', value: data.positive || 0, color: '#34C759' },
+    { label: 'Neutral', value: data.neutral || 0, color: '#FFCC00' },
+    { label: 'Negative', value: data.negative || 0, color: '#FF3B30' }
+  ]
 
   return (
-    <div style={styles.appleCard}>
-      <div style={styles.cardHeader}>
-        <div style={styles.cardTitle}>
-          <span style={styles.cardTitleText}>{title}</span>
-        </div>
-        <button
-          onClick={() => setOpenSettings(openSettings === widgetId ? null : widgetId)}
-          style={styles.settingsButton}
-        >
-          ···
-        </button>
+    <div style={styles.distributionContainer}>
+      <div style={styles.barContainer}>
+        {items.map((item) => {
+          const percentage = (item.value / total) * 100
+          return percentage > 0 ? (
+            <div
+              key={item.label}
+              style={{
+                width: `${percentage}%`,
+                height: '100%',
+                backgroundColor: item.color,
+                transition: config.animated ? 'width 0.5s ease' : 'none'
+              }}
+            />
+          ) : null
+        })}
       </div>
-
-      {openSettings === widgetId && (
-        <AppleSettings
-          config={config}
-          participants={participants}
-          onConfigChange={onConfigChange}
-          options={[
-            { type: 'select', key: 'participant', label: 'Filter' },
-            { type: 'select', key: 'style', label: 'Style', selectOptions: [
-              { value: 'minimal', label: 'Minimal' },
-              { value: 'detailed', label: 'Detailed' }
-            ]}
-          ]}
-        />
+      
+      {config.showLabels && (
+        <div style={styles.legendContainer}>
+          {items.map((item) => (
+            <div key={item.label} style={styles.legendItem}>
+              <div style={{ ...styles.legendDot, backgroundColor: item.color }} />
+              <span style={styles.legendText}>
+                {item.label}: {item.value} ({((item.value / total) * 100).toFixed(0)}%)
+              </span>
+            </div>
+          ))}
+        </div>
       )}
-
-      <div style={styles.kpiContent}>
-        <div style={styles.kpiCircle}>
-          <span style={styles.kpiValue}>{value}</span>
-        </div>
-        {subtitleText && (
-          <div style={styles.kpiSubtitle}>{subtitleText}</div>
-        )}
-      </div>
     </div>
   )
 }
 
 // ============================================
-// APPLE SENTIMENT CHART
+// TOXICITY GAUGE
 // ============================================
 
-function AppleSentimentChart({
-  widgetId,
-  config,
-  participants,
-  data,
-  onConfigChange,
-  openSettings,
-  setOpenSettings
-}) {
-  const filteredData = config.participant
-    ? data.filter(entry => {
-        const participant = participants.find(p => p.id === config.participant)
-        return entry.nickname === participant?.name
-      })
-    : data
-
-  const counts = {
-    very_positive: 0,
-    positive: 0,
-    neutral: 0,
-    negative: 0,
-    very_negative: 0
+function ToxicityGauge({ score, config }) {
+  const safeScore = score ?? 0
+  const percentage = (safeScore * 100).toFixed(0)
+  
+  const getColor = () => {
+    if (safeScore < 0.3) return '#34C759'
+    if (safeScore < 0.6) return '#FFCC00'
+    return '#FF3B30'
   }
 
-  filteredData.forEach(entry => {
-    const sentiment = entry.sentiment.sentiment
-    if (counts[sentiment] !== undefined) counts[sentiment]++
-  })
-
-  const total = filteredData.length
-  const percentages = Object.entries(counts).map(([key, count]) => ({
-    key,
-    count,
-    percentage: total > 0 ? (count / total) * 100 : 0
-  }))
-
-  // Scala di grigi Apple-style (elegante)
-  const grayScaleMap = {
-    very_negative: '#2c2c2e',
-    negative: '#48484a',
-    neutral: '#8e8e93',
-    positive: '#aeaeb2',
-    very_positive: '#c7c7cc'
-  }
-
-  const labelMap = {
-    very_positive: 'Very Positive',
-    positive: 'Positive',
-    neutral: 'Neutral',
-    negative: 'Negative',
-    very_negative: 'Very Negative'
-  }
-
-  return (
-    <div style={{ ...styles.appleCard, ...styles.wideCard }}>
-      <div style={styles.cardHeader}>
-        <div style={styles.cardTitle}>
-          <span style={styles.cardTitleText}>Sentiment Distribution</span>
-        </div>
-        <button
-          onClick={() => setOpenSettings(openSettings === widgetId ? null : widgetId)}
-          style={styles.settingsButton}
-        >
-          ···
-        </button>
-      </div>
-
-      {openSettings === widgetId && (
-        <AppleSettings
-          config={config}
-          participants={participants}
-          onConfigChange={onConfigChange}
-          options={[
-            { type: 'select', key: 'participant', label: 'Filter' },
-            { type: 'toggle', key: 'showLabels', label: 'Show Labels' },
-            { type: 'toggle', key: 'animated', label: 'Animated' }
-          ]}
-        />
-      )}
-
-      <div style={styles.chartContent}>
-        <div style={styles.appleBar}>
-          {percentages.map(({ key, percentage }) =>
-            percentage > 0 ? (
-              <div
-                key={key}
-                style={{
-                  width: `${percentage}%`,
-                  height: '100%',
-                  backgroundColor: grayScaleMap[key],
-                  transition: config.animated ? 'all 0.5s ease' : 'none'
-                }}
-              />
-            ) : null
-          )}
-        </div>
-
-        {config.showLabels && (
-          <div style={styles.appleLegend}>
-            {percentages.map(({ key, count, percentage }) => (
-              <div key={key} style={styles.legendRow}>
-                <div
-                  style={{
-                    ...styles.legendDot,
-                    backgroundColor: grayScaleMap[key]
-                  }}
-                />
-                <span style={styles.legendText}>
-                  {labelMap[key]}: {count} ({percentage.toFixed(0)}%)
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// ============================================
-// APPLE TOXICITY GAUGE
-// ============================================
-
-function AppleToxicityGauge({
-  widgetId,
-  config,
-  participants,
-  data,
-  calculateStats,
-  onConfigChange,
-  openSettings,
-  setOpenSettings
-}) {
-  const filteredData = config.participant
-    ? data.filter(entry => {
-        const participant = participants.find(p => p.id === config.participant)
-        return entry.nickname === participant?.name
-      })
-    : data
-
-  const stats = calculateStats(filteredData)
-  const percentage = stats.avgToxicity * 100
-
-  const getRiskLevel = () => {
-    if (stats.avgToxicity < 0.2) return 'LOW'
-    if (stats.avgToxicity < 0.5) return 'MEDIUM'
+  const getLabel = () => {
+    if (safeScore < 0.3) return 'LOW'
+    if (safeScore < 0.6) return 'MEDIUM'
     return 'HIGH'
   }
 
-  // Gradiente di grigio in base al rischio
-  const getGradient = () => {
-    if (stats.avgToxicity < 0.2) return 'linear-gradient(135deg, #c7c7cc 0%, #d1d1d6 100%)'
-    if (stats.avgToxicity < 0.5) return 'linear-gradient(135deg, #8e8e93 0%, #aeaeb2 100%)'
-    return 'linear-gradient(135deg, #3a3a3c 0%, #48484a 100%)'
+  return (
+    <div style={styles.gaugeContainer}>
+      <div style={{ ...styles.gaugeCircle, borderColor: getColor() }}>
+        <div style={styles.gaugeInner}>
+          <div style={{ ...styles.gaugeValue, color: getColor() }}>
+            {percentage}%
+          </div>
+          <div style={styles.gaugeLabel}>{getLabel()}</div>
+        </div>
+      </div>
+      {config.showDetails && (
+        <div style={styles.gaugeDetails}>
+          <div style={styles.detailItem}>
+            <span style={styles.detailLabel}>Toxicity Score</span>
+            <span style={styles.detailValue}>{safeScore.toFixed(3)}</span>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ============================================
+// MESSAGE STREAM
+// ============================================
+
+function MessageStream({ messages, config }) {
+  if (!messages || messages.length === 0) {
+    return <div style={styles.emptyState}>No messages</div>
   }
 
   return (
-    <div style={styles.appleCard}>
-      <div style={styles.cardHeader}>
-        <div style={styles.cardTitle}>
-          <span style={styles.cardTitleText}>Toxicity Level</span>
-        </div>
-        <button
-          onClick={() => setOpenSettings(openSettings === widgetId ? null : widgetId)}
-          style={styles.settingsButton}
-        >
-          ···
-        </button>
-      </div>
-
-      {openSettings === widgetId && (
-        <AppleSettings
-          config={config}
-          participants={participants}
-          onConfigChange={onConfigChange}
-          options={[
-            { type: 'select', key: 'participant', label: 'Filter' },
-            { type: 'toggle', key: 'showDetails', label: 'Show Details' }
-          ]}
-        />
-      )}
-
-      {filteredData.length > 0 ? (
-        <div style={styles.gaugeContent}>
-          <div
-            style={{
-              ...styles.appleGauge,
-              background: getGradient()
-            }}
-          >
-            <div style={styles.gaugeInner}>
-              <span style={styles.gaugeValue}>{percentage.toFixed(0)}%</span>
-              <span style={styles.gaugeLabel}>{getRiskLevel()}</span>
-            </div>
-          </div>
-
-          {config.showDetails && (
-            <div style={styles.gaugeDetails}>
-              <div style={styles.detailRow}>
-                <span style={styles.detailLabel}>Average</span>
-                <span style={styles.detailValue}>{stats.avgToxicity.toFixed(3)}</span>
-              </div>
-              <div style={styles.detailRow}>
-                <span style={styles.detailLabel}>Toxic Count</span>
-                <span style={styles.detailValue}>
-                  {stats.toxicCount} / {stats.totalMessages}
-                </span>
-              </div>
-            </div>
-          )}
-        </div>
-      ) : (
-        <div style={styles.emptyState}>No data available</div>
-      )}
+    <div style={styles.messageStreamContainer}>
+      {messages.map((msg, idx) => (
+        <MessageBubble key={idx} message={msg} config={config} />
+      ))}
     </div>
   )
 }
 
-// ============================================
-// APPLE MESSAGE STREAM
-// ============================================
+function MessageBubble({ message, config }) {
+  const getSentimentColor = (label) => {
+    if (label === 'positive') return '#34C759'
+    if (label === 'neutral') return '#FFCC00'
+    return '#FF3B30'
+  }
 
-function AppleMessageStream({
-  widgetId,
-  config,
-  participants,
-  data,
-  onConfigChange,
-  openSettings,
-  setOpenSettings
-}) {
-  const filteredData = config.participant
-    ? data.filter(entry => {
-        const participant = participants.find(p => p.id === config.participant)
-        return entry.nickname === participant?.name
-      })
-    : data
+  const getToxicityBadge = (toxicity) => {
+    if (!toxicity.is_toxic) return null
+    
+    // Colore basato su severity
+    const colors = {
+      low: '#FFCC00',
+      medium: '#FF9500',
+      high: '#FF3B30'
+    }
+    
+    return {
+      text: toxicity.severity.toUpperCase(),
+      color: colors[toxicity.severity] || '#FF3B30'
+    }
+  }
 
-  const displayMessages = filteredData.slice(0, config.limit || 10)
-
-  return (
-    <div style={{ ...styles.appleCard, ...styles.wideCard }}>
-      <div style={styles.cardHeader}>
-        <div style={styles.cardTitle}>
-          <span style={styles.cardTitleText}>Message Stream</span>
-        </div>
-        <button
-          onClick={() => setOpenSettings(openSettings === widgetId ? null : widgetId)}
-          style={styles.settingsButton}
-        >
-          ···
-        </button>
-      </div>
-
-      {openSettings === widgetId && (
-        <AppleSettings
-          config={config}
-          participants={participants}
-          onConfigChange={onConfigChange}
-          options={[
-            { type: 'select', key: 'participant', label: 'Filter' },
-            { type: 'slider', key: 'limit', label: 'Message Limit', min: 5, max: 20 },
-            { type: 'toggle', key: 'showTimestamps', label: 'Show Timestamps' }
-          ]}
-        />
-      )}
-
-      <div style={styles.messageList}>
-        {displayMessages.map((msg, idx) => (
-          <AppleMessageBubble
-            key={idx}
-            message={msg}
-            showTimestamp={config.showTimestamps}
-          />
-        ))}
-      </div>
-    </div>
-  )
-}
-
-function AppleMessageBubble({ message, showTimestamp }) {
-  // Scala di grigi in base al sentiment
-  const sentimentGray = Math.round((message.sentiment.stars / 5) * 150) + 100
-  const sentimentColor = `rgb(${sentimentGray}, ${sentimentGray}, ${sentimentGray})`
+  const badge = getToxicityBadge(message.toxicity)
 
   return (
-    <div style={styles.appleBubble}>
+    <div style={styles.messageBubble}>
       <div style={styles.bubbleHeader}>
         <span style={styles.bubbleAuthor}>{message.nickname}</span>
-        <div style={styles.bubbleScores}>
+        <div style={styles.bubbleBadges}>
           <span
             style={{
-              ...styles.bubbleBadge,
-              backgroundColor: sentimentColor
+              ...styles.sentimentBadge,
+              backgroundColor: getSentimentColor(message.sentiment.label)
             }}
           >
-            {message.sentiment.stars.toFixed(1)}
+            {(message.sentiment.score * 100).toFixed(0)}%
           </span>
-          {message.toxicity.is_toxic && (
-            <span style={styles.bubbleBadgeToxic}>Toxic</span>
+          {badge && (
+            <span
+              style={{
+                ...styles.toxicBadge,
+                backgroundColor: badge.color
+              }}
+            >
+              {badge.text}
+            </span>
           )}
         </div>
       </div>
       <p style={styles.bubbleText}>{message.text}</p>
-      {showTimestamp && (
+      {config.showTimestamps && (
         <span style={styles.bubbleTime}>{message.from}</span>
       )}
     </div>
@@ -596,128 +690,30 @@ function AppleMessageBubble({ message, showTimestamp }) {
 }
 
 // ============================================
-// APPLE SETTINGS PANEL
-// ============================================
-
-function AppleSettings({ config, participants, onConfigChange, options }) {
-  return (
-    <div style={styles.settingsPanel}>
-      {options.map((option, idx) => (
-        <div key={idx} style={styles.settingRow}>
-          <span style={styles.settingLabel}>{option.label}</span>
-
-          {option.type === 'select' && !option.selectOptions && (
-            <select
-              value={config[option.key] || ''}
-              onChange={(e) =>
-                onConfigChange({ [option.key]: e.target.value || null })
-              }
-              style={styles.appleSelect}
-            >
-              <option value="">All</option>
-              {participants.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          )}
-
-          {option.type === 'select' && option.selectOptions && (
-            <select
-              value={config[option.key] || option.selectOptions[0].value}
-              onChange={(e) =>
-                onConfigChange({ [option.key]: e.target.value })
-              }
-              style={styles.appleSelect}
-            >
-              {option.selectOptions.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          )}
-
-          {option.type === 'toggle' && (
-            <label style={styles.toggleContainer}>
-              <input
-                type="checkbox"
-                checked={config[option.key] || false}
-                onChange={(e) =>
-                  onConfigChange({ [option.key]: e.target.checked })
-                }
-                style={styles.toggleInput}
-              />
-              <span
-                style={{
-                  ...styles.toggleSlider,
-                  backgroundColor: config[option.key] ? '#3a3a3c' : '#d1d1d6'
-                }}
-              >
-                <span
-                  style={{
-                    ...styles.toggleThumb,
-                    transform: config[option.key]
-                      ? 'translateX(20px)'
-                      : 'translateX(2px)'
-                  }}
-                />
-              </span>
-            </label>
-          )}
-
-          {option.type === 'slider' && (
-            <div style={styles.sliderContainer}>
-              <input
-                type="range"
-                min={option.min}
-                max={option.max}
-                value={config[option.key] || option.min}
-                onChange={(e) =>
-                  onConfigChange({ [option.key]: parseInt(e.target.value) })
-                }
-                style={styles.appleSlider}
-              />
-              <span style={styles.sliderValue}>
-                {config[option.key] || option.min}
-              </span>
-            </div>
-          )}
-        </div>
-      ))}
-    </div>
-  )
-}
-
-// ============================================
-// STYLES - APPLE GRAYSCALE
+// STYLES - iOS DARK WIDGETS
 // ============================================
 
 const styles = {
   appContainer: {
     minHeight: '100vh',
-    backgroundColor: '#f5f5f7',
-    fontFamily:
-      '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", sans-serif',
-    transition: 'background-color 0.3s ease'
+    backgroundColor: '#1c1c1e',
+    fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif',
+    color: '#fff'
   },
 
-  // HEADER - Apple Glassmorphism
+  // HEADER
   header: {
     position: 'sticky',
     top: 0,
     zIndex: 100,
-    backgroundColor: 'rgba(255, 255, 255, 0.72)',
-    backdropFilter: 'blur(20px)',
-    WebkitBackdropFilter: 'blur(20px)',
-    borderBottom: '0.5px solid rgba(0, 0, 0, 0.1)',
-    transition: 'all 0.3s ease'
+    backgroundColor: '#2c2c2e',
+    borderBottom: '1px solid #3a3a3c',
+    padding: '1rem 0'
   },
   headerContent: {
     maxWidth: '1400px',
     margin: '0 auto',
-    padding: '1rem 2rem',
+    padding: '0 2rem',
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center'
@@ -727,52 +723,49 @@ const styles = {
     alignItems: 'center',
     gap: '1rem'
   },
-  logoContainer: {
-    width: '48px',
-    height: '48px',
+  logoCircle: {
+    width: '50px',
+    height: '50px',
     borderRadius: '12px',
-    background: 'linear-gradient(135deg, #2c2c2e 0%, #48484a 100%)',
+    background: 'linear-gradient(135deg, #FF3B30 0%, #FF9500 100%)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)'
-  },
-  logoText: {
-    color: '#ffffff',
     fontSize: '1.2rem',
     fontWeight: '700',
-    letterSpacing: '1px'
+    color: '#fff',
+    boxShadow: '0 4px 12px rgba(255, 59, 48, 0.4)'
   },
   title: {
     margin: 0,
-    fontSize: '1.25rem',
-    fontWeight: '600',
-    color: '#1d1d1f',
-    letterSpacing: '-0.02em'
+    fontSize: '1.4rem',
+    fontWeight: '700',
+    color: '#fff'
   },
   subtitle: {
-    fontSize: '0.8rem',
-    color: '#6e6e73',
-    fontWeight: '400'
+    margin: 0,
+    fontSize: '0.85rem',
+    color: '#8e8e93',
+    fontWeight: '500'
   },
 
   // ERROR & LOADING
   errorBanner: {
     padding: '1rem 2rem',
     margin: '1rem 2rem',
-    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+    backgroundColor: '#3a3a3c',
     borderRadius: '12px',
     display: 'flex',
     alignItems: 'center',
     gap: '0.75rem',
     fontSize: '0.9rem',
-    color: '#1d1d1f'
+    color: '#FF3B30'
   },
   errorIcon: {
     width: '24px',
     height: '24px',
     borderRadius: '12px',
-    backgroundColor: '#2c2c2e',
+    backgroundColor: '#FF3B30',
     color: 'white',
     display: 'flex',
     alignItems: 'center',
@@ -787,18 +780,18 @@ const styles = {
     minHeight: '60vh',
     gap: '1.5rem'
   },
-  appleSpinner: {
+  spinner: {
     width: '50px',
     height: '50px',
-    border: '4px solid #d1d1d6',
-    borderTop: '4px solid #2c2c2e',
+    border: '4px solid #3a3a3c',
+    borderTop: '4px solid #007AFF',
     borderRadius: '50%',
     animation: 'spin 1s linear infinite'
   },
   loadingText: {
     fontSize: '0.95rem',
     fontWeight: '500',
-    color: '#6e6e73'
+    color: '#8e8e93'
   },
 
   // WIDGET GRID
@@ -807,284 +800,129 @@ const styles = {
     margin: '0 auto',
     padding: '2rem',
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-    gap: '1.5rem'
+    gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+    gap: '1.25rem'
   },
 
-  // APPLE CARD - Glassmorphism
-  appleCard: {
+  // iOS WIDGET CARD
+  iosWidget: {
     borderRadius: '20px',
     padding: '1.5rem',
-    backgroundColor: 'rgba(255, 255, 255, 0.72)',
-    backdropFilter: 'blur(20px)',
-    WebkitBackdropFilter: 'blur(20px)',
-    border: '0.5px solid rgba(0, 0, 0, 0.05)',
-    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.08)',
-    transition: 'transform 0.3s ease, box-shadow 0.3s ease'
+    backgroundColor: '#2c2c2e',
+    border: '1px solid #3a3a3c',
+    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
+    transition: 'transform 0.2s ease, box-shadow 0.2s ease'
   },
-  wideCard: {
+  wideWidget: {
     gridColumn: 'span 2'
   },
-
-  // CARD HEADER
-  cardHeader: {
+  widgetHeader: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: '1.25rem'
   },
-  cardTitle: {
+  widgetTitle: {
+    fontSize: '1rem',
+    fontWeight: '600',
+    color: '#fff',
+    letterSpacing: '0.02em'
+  },
+  headerActions: {
     display: 'flex',
     alignItems: 'center',
     gap: '0.75rem'
   },
-  cardTitleText: {
-    fontSize: '1.1rem',
-    fontWeight: '600',
-    color: '#1d1d1f',
-    letterSpacing: '-0.01em'
+  widgetDot: {
+    width: '12px',
+    height: '12px',
+    borderRadius: '6px',
+    boxShadow: '0 0 8px currentColor'
   },
   settingsButton: {
     width: '32px',
     height: '32px',
     borderRadius: '8px',
     border: 'none',
+    backgroundColor: '#3a3a3c',
+    color: '#fff',
     fontSize: '1.2rem',
+    fontWeight: '600',
     cursor: 'pointer',
-    backgroundColor: 'rgba(0, 0, 0, 0.05)',
-    color: '#6e6e73',
-    fontWeight: '700',
-    letterSpacing: '1px',
-    transition: 'transform 0.2s ease, background-color 0.2s ease'
-  },
-
-  // KPI CONTENT
-  kpiContent: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: '1rem',
-    padding: '1rem 0'
-  },
-  kpiCircle: {
-    width: '120px',
-    height: '120px',
-    borderRadius: '60px',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    background: 'linear-gradient(135deg, #2c2c2e 0%, #48484a 100%)',
-    boxShadow: '0 8px 24px rgba(0, 0, 0, 0.15)'
+    transition: 'all 0.2s ease'
   },
-  kpiValue: {
-    fontSize: '2.5rem',
-    fontWeight: '700',
-    color: 'white',
-    textShadow: '0 2px 4px rgba(0, 0, 0, 0.2)'
-  },
-  kpiSubtitle: {
-    fontSize: '0.9rem',
-    fontWeight: '500',
-    color: '#6e6e73',
-    textAlign: 'center'
-  },
-
-  // CHART
-  chartContent: {
+  widgetContent: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '1.5rem'
-  },
-  appleBar: {
-    display: 'flex',
-    height: '24px',
-    borderRadius: '12px',
-    overflow: 'hidden',
-    boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.1)'
-  },
-  appleLegend: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(2, 1fr)',
-    gap: '0.75rem'
-  },
-  legendRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.5rem'
-  },
-  legendDot: {
-    width: '12px',
-    height: '12px',
-    borderRadius: '6px'
-  },
-  legendText: {
-    fontSize: '0.85rem',
-    fontWeight: '500',
-    color: '#6e6e73'
-  },
-
-  // GAUGE
-  gaugeContent: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: '1.5rem',
-    padding: '1rem 0'
-  },
-  appleGauge: {
-    width: '160px',
-    height: '160px',
-    borderRadius: '80px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    boxShadow: '0 8px 24px rgba(0, 0, 0, 0.15)'
-  },
-  gaugeInner: {
-    width: '120px',
-    height: '120px',
-    borderRadius: '60px',
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    backdropFilter: 'blur(20px)',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '0.25rem'
-  },
-  gaugeValue: {
-    fontSize: '2rem',
-    fontWeight: '700',
-    color: '#1d1d1f'
-  },
-  gaugeLabel: {
-    fontSize: '0.7rem',
-    fontWeight: '600',
-    color: '#6e6e73',
-    letterSpacing: '0.5px'
-  },
-  gaugeDetails: {
-    width: '100%',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '0.75rem'
-  },
-  detailRow: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: '0.75rem',
-    borderRadius: '10px',
-    backgroundColor: 'rgba(0, 0, 0, 0.03)'
-  },
-  detailLabel: {
-    fontSize: '0.85rem',
-    fontWeight: '500',
-    color: '#6e6e73'
-  },
-  detailValue: {
-    fontSize: '0.95rem',
-    fontWeight: '600',
-    color: '#1d1d1f'
-  },
-
-  // MESSAGES
-  messageList: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '0.75rem',
-    maxHeight: '500px',
-    overflowY: 'auto'
-  },
-  appleBubble: {
-    padding: '1rem',
-    borderRadius: '16px',
-    backgroundColor: 'rgba(0, 0, 0, 0.03)',
-    transition: 'transform 0.2s ease'
-  },
-  bubbleHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: '0.5rem'
-  },
-  bubbleAuthor: {
-    fontSize: '0.9rem',
-    fontWeight: '600',
-    color: '#1d1d1f'
-  },
-  bubbleScores: {
-    display: 'flex',
-    gap: '0.5rem'
-  },
-  bubbleBadge: {
-    fontSize: '0.7rem',
-    fontWeight: '600',
-    padding: '0.25rem 0.6rem',
-    borderRadius: '8px',
-    color: '#1d1d1f'
-  },
-  bubbleBadgeToxic: {
-    fontSize: '0.7rem',
-    fontWeight: '600',
-    color: '#1d1d1f',
-    backgroundColor: 'rgba(0, 0, 0, 0.15)',
-    padding: '0.25rem 0.6rem',
-    borderRadius: '8px'
-  },
-  bubbleText: {
-    margin: 0,
-    fontSize: '0.9rem',
-    lineHeight: '1.5',
-    color: '#1d1d1f'
-  },
-  bubbleTime: {
-    display: 'block',
-    marginTop: '0.5rem',
-    fontSize: '0.75rem',
-    fontWeight: '500',
-    color: '#86868b'
+    gap: '1rem'
   },
 
   // SETTINGS PANEL
   settingsPanel: {
-    marginTop: '1rem',
+    marginBottom: '1.25rem',
     padding: '1rem',
     borderRadius: '12px',
-    backgroundColor: 'rgba(0, 0, 0, 0.03)',
+    backgroundColor: '#1c1c1e',
+    border: '1px solid #3a3a3c',
     display: 'flex',
     flexDirection: 'column',
-    gap: '0.75rem',
+    gap: '1rem',
     animation: 'slideDown 0.3s ease'
   },
   settingRow: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: '0.5rem 0'
+    gap: '1rem'
   },
   settingLabel: {
-    fontSize: '0.9rem',
+    fontSize: '0.85rem',
     fontWeight: '500',
-    color: '#1d1d1f'
+    color: '#8e8e93'
   },
-
-  // APPLE SELECT
-  appleSelect: {
+  settingSelect: {
     padding: '0.5rem 0.75rem',
     fontSize: '0.85rem',
     borderRadius: '8px',
-    border: '1px solid rgba(0, 0, 0, 0.1)',
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    color: '#1d1d1f',
+    border: '1px solid #3a3a3c',
+    backgroundColor: '#2c2c2e',
+    color: '#fff',
     outline: 'none',
     fontWeight: '500',
     cursor: 'pointer',
     minWidth: '120px'
   },
+  numberInput: {
+    padding: '0.5rem 0.75rem',
+    fontSize: '0.85rem',
+    borderRadius: '8px',
+    border: '1px solid #3a3a3c',
+    backgroundColor: '#2c2c2e',
+    color: '#fff',
+    outline: 'none',
+    fontWeight: '500',
+    width: '80px'
+  },
 
-  // TOGGLE SWITCH - iOS Style Grayscale
-  toggleContainer: {
+  // COLOR PICKER
+  colorPicker: {
+    display: 'flex',
+    gap: '0.5rem',
+    flexWrap: 'wrap'
+  },
+  colorButton: {
+    width: '32px',
+    height: '32px',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    transition: 'all 0.2s ease'
+  },
+
+  // TOGGLE SWITCH (iOS Style)
+  toggleSwitch: {
     position: 'relative',
     display: 'inline-block',
     width: '50px',
@@ -1103,54 +941,190 @@ const styles = {
     right: 0,
     bottom: 0,
     borderRadius: '14px',
-    transition: 'background-color 0.3s ease'
-  },
-  toggleThumb: {
-    position: 'absolute',
-    top: '2px',
-    width: '24px',
-    height: '24px',
-    backgroundColor: 'white',
-    borderRadius: '12px',
-    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
-    transition: 'transform 0.3s ease'
-  },
-
-  // SLIDER
-  sliderContainer: {
+    transition: 'background-color 0.3s ease',
     display: 'flex',
     alignItems: 'center',
+    padding: '0 2px'
+  },
+
+  // KPI
+  kpiValue: {
+    fontSize: '3rem',
+    fontWeight: '700',
+    color: '#fff',
+    textAlign: 'center',
+    lineHeight: '1'
+  },
+  kpiLabel: {
+    fontSize: '0.85rem',
+    fontWeight: '500',
+    color: '#8e8e93',
+    textAlign: 'center'
+  },
+
+  // DISTRIBUTION
+  distributionContainer: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '1.25rem'
+  },
+  barContainer: {
+    display: 'flex',
+    height: '32px',
+    borderRadius: '16px',
+    overflow: 'hidden',
+    boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.4)'
+  },
+  legendContainer: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(3, 1fr)',
     gap: '0.75rem'
   },
-  appleSlider: {
-    width: '120px',
-    height: '4px',
-    borderRadius: '2px',
-    outline: 'none',
-    appearance: 'none',
-    WebkitAppearance: 'none',
-    background: 'linear-gradient(to right, #2c2c2e 0%, #2c2c2e 50%, #d1d1d6 50%, #d1d1d6 100%)'
+  legendItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem'
   },
-  sliderValue: {
+  legendDot: {
+    width: '10px',
+    height: '10px',
+    borderRadius: '5px'
+  },
+  legendText: {
+    fontSize: '0.8rem',
+    fontWeight: '500',
+    color: '#8e8e93'
+  },
+
+  // GAUGE
+  gaugeContainer: {
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: '1rem',
+    padding: '1rem 0'
+  },
+  gaugeCircle: {
+    width: '160px',
+    height: '160px',
+    borderRadius: '80px',
+    border: '12px solid',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    boxShadow: '0 0 20px currentColor'
+  },
+  gaugeInner: {
+    textAlign: 'center'
+  },
+  gaugeValue: {
+    fontSize: '2.5rem',
+    fontWeight: '700'
+  },
+  gaugeLabel: {
+    fontSize: '0.75rem',
+    fontWeight: '600',
+    color: '#8e8e93',
+    letterSpacing: '1px',
+    marginTop: '0.25rem'
+  },
+  gaugeDetails: {
+    width: '100%',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.5rem'
+  },
+  detailItem: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    padding: '0.5rem 1rem',
+    borderRadius: '8px',
+    backgroundColor: '#1c1c1e'
+  },
+  detailLabel: {
+    fontSize: '0.8rem',
+    fontWeight: '500',
+    color: '#8e8e93'
+  },
+  detailValue: {
+    fontSize: '0.9rem',
+    fontWeight: '600',
+    color: '#fff'
+  },
+
+  // MESSAGE STREAM
+  messageStreamContainer: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.75rem',
+    maxHeight: '400px',
+    overflowY: 'auto'
+  },
+  messageBubble: {
+    padding: '0.75rem',
+    borderRadius: '12px',
+    backgroundColor: '#1c1c1e',
+    border: '1px solid #3a3a3c',
+    transition: 'all 0.2s ease'
+  },
+  bubbleHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '0.5rem'
+  },
+  bubbleAuthor: {
     fontSize: '0.85rem',
     fontWeight: '600',
-    color: '#1d1d1f',
-    minWidth: '30px',
-    textAlign: 'right'
+    color: '#fff'
+  },
+  bubbleBadges: {
+    display: 'flex',
+    gap: '0.5rem'
+  },
+  sentimentBadge: {
+    fontSize: '0.7rem',
+    fontWeight: '700',
+    color: '#000',
+    padding: '0.25rem 0.5rem',
+    borderRadius: '6px'
+  },
+  toxicBadge: {
+    fontSize: '0.7rem',
+    fontWeight: '700',
+    color: '#fff',
+    padding: '0.25rem 0.5rem',
+    borderRadius: '6px'
+  },
+  bubbleText: {
+    margin: 0,
+    fontSize: '0.85rem',
+    lineHeight: '1.5',
+    color: '#d1d1d6'
+  },
+  bubbleTime: {
+    display: 'block',
+    marginTop: '0.5rem',
+    fontSize: '0.7rem',
+    fontWeight: '500',
+    color: '#636366'
   },
 
   // EMPTY STATE
   emptyState: {
     textAlign: 'center',
     padding: '2rem',
-    color: '#6e6e73',
+    color: '#8e8e93',
     fontSize: '0.9rem',
     fontWeight: '500'
   }
 }
 
-// CSS Animations
-const globalStyles = `
+// CSS Animations & Hover Effects
+const styleSheet = document.createElement('style')
+styleSheet.textContent = `
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
@@ -1166,19 +1140,76 @@ const globalStyles = `
   }
 }
 
-.appleCard:hover {
+/* Widget hover effects */
+div[style*="iosWidget"]:hover {
   transform: translateY(-4px);
-  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.12);
 }
 
-.settingsButton:hover {
-  transform: scale(1.1);
-  background-color: rgba(0, 0, 0, 0.1);
+/* Settings button hover */
+button:hover {
+  transform: scale(1.05);
 }
 
-.settingsButton:active {
+button:active {
   transform: scale(0.95);
 }
+
+/* Color button hover */
+button[style*="colorButton"]:hover {
+  transform: scale(1.15);
+}
+
+/* Message bubble hover */
+div[style*="messageBubble"]:hover {
+  background-color: #2c2c2e;
+  border-color: #48484a;
+}
+
+/* Toggle switch animation */
+input[type="checkbox"]:checked + span::after {
+  content: '';
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  background-color: white;
+  border-radius: 12px;
+  right: 2px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  transition: all 0.3s ease;
+}
+
+input[type="checkbox"]:not(:checked) + span::after {
+  content: '';
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  background-color: white;
+  border-radius: 12px;
+  left: 2px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  transition: all 0.3s ease;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1c1c1e;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #3a3a3c;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #48484a;
+}
 `
+document.head.appendChild(styleSheet)
 
 export default App

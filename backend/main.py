@@ -1,8 +1,9 @@
 """
-Backend Gateway - API Orchestrator
+Backend Gateway - API Orchestrator (v3.2)
 
-Questo backend orchestra i microservizi ML senza caricare modelli.
-Mantiene la logica business e i dati, delega ML a servizi specializzati.
+Orchestratore con:
+- SENTIMENT: Abstract Predictor Pattern → positive/neutral/negative
+- TOXICITY: Standalone Detector → is_toxic, severity, score
 
 Architecture:
 - BERT Sentiment Service: http://bert-sentiment:5001
@@ -17,6 +18,17 @@ import httpx
 import random
 import os
 from config.config_loader import config_loader
+from models import (
+    PredictorFactory,
+    SentimentPredictor,
+    ToxicityDetector,  # Standalone detector
+    NormalizedPrediction,
+    BatchNormalizedPrediction,
+    ToxicityResult,  # Dedicated result
+    BatchToxicityResult,
+    SentimentLabel,
+    ToxicitySeverity
+)
 
 # ============================================
 # FASTAPI APP SETUP
@@ -24,8 +36,8 @@ from config.config_loader import config_loader
 
 app = FastAPI(
     title="Meeting Transcript API Gateway",
-    description="Backend orchestrator per microservizi di sentiment e toxicity analysis",
-    version="3.0.0"
+    description="Backend orchestrator: Sentiment (abstract pattern) + Toxicity (standalone detector)",
+    version="3.2.0"
 )
 
 app.add_middleware(
@@ -43,8 +55,15 @@ app.add_middleware(
 BERT_SERVICE_URL = os.getenv("BERT_SERVICE_URL", "http://bert-sentiment:5001")
 TOXICITY_SERVICE_URL = os.getenv("TOXICITY_SERVICE_URL", "http://bert-toxicity:5003")
 
-# HTTP client with timeout for service calls
+# HTTP client
 http_client = httpx.AsyncClient(timeout=30.0)
+
+# Predictor Factory
+predictor_factory = PredictorFactory(http_client)
+
+# Global predictors
+sentiment_predictor: Optional[SentimentPredictor] = None
+toxicity_detector: Optional[ToxicityDetector] = None  # Renamed: detector not predictor
 
 # ============================================
 # PYDANTIC MODELS
@@ -75,29 +94,15 @@ class TranscriptResponse(BaseModel):
 class MeetingResponse(BaseModel):
     metadata: MeetingMetadata
 
-# ============================================
-# SENTIMENT & TOXICITY MODELS
-# ============================================
-
-class SentimentResult(BaseModel):
-    stars: float
-    sentiment: str
-    confidence: float
-
-class ToxicityResult(BaseModel):
-    toxicity_score: float
-    is_toxic: bool
-    confidence: float
-    label: str
-
-class SentimentAnalysisRequest(BaseModel):
+# Request models for analysis
+class UnifiedAnalysisRequest(BaseModel):
     text: str = Field(..., min_length=1, max_length=5000)
+
+class BatchUnifiedAnalysisRequest(BaseModel):
+    texts: List[str] = Field(..., max_items=100)
 
 class ToxicityAnalysisRequest(BaseModel):
     text: str = Field(..., min_length=1, max_length=5000)
-
-class BatchSentimentRequest(BaseModel):
-    texts: List[str] = Field(..., max_items=100)
 
 class BatchToxicityRequest(BaseModel):
     texts: List[str] = Field(..., max_items=100)
@@ -160,50 +165,29 @@ for meeting_config in MEETINGS_CONFIG:
     }
 
 # ============================================
-# MICROSERVICES COMMUNICATION HELPERS
+# STARTUP/SHUTDOWN HANDLERS
 # ============================================
 
-async def call_bert_service(endpoint: str, payload: dict) -> dict:
-    """Chiama il servizio BERT per sentiment analysis"""
-    try:
-        response = await http_client.post(
-            f"{BERT_SERVICE_URL}/{endpoint}",
-            json=payload,
-            timeout=30.0
-        )
-        response.raise_for_status()
-        return response.json()
-    except httpx.TimeoutException:
-        raise HTTPException(
-            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-            detail="BERT service timeout"
-        )
-    except httpx.HTTPError as e:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"BERT service error: {str(e)}"
-        )
+@app.on_event("startup")
+async def startup_event():
+    """Inizializza i predictors/detectors all'avvio"""
+    global sentiment_predictor, toxicity_detector
+    
+    sentiment_predictor = predictor_factory.create_sentiment_predictor(BERT_SERVICE_URL)
+    toxicity_detector = predictor_factory.create_toxicity_detector(TOXICITY_SERVICE_URL)
+    
+    print("✅ Models initialized:")
+    print(f"   - Sentiment Predictor (abstract): {BERT_SERVICE_URL}")
+    print(f"   - Toxicity Detector (standalone): {TOXICITY_SERVICE_URL}")
 
-async def call_toxicity_service(endpoint: str, payload: dict) -> dict:
-    """Chiama il servizio Toxicity per toxicity analysis"""
-    try:
-        response = await http_client.post(
-            f"{TOXICITY_SERVICE_URL}/{endpoint}",
-            json=payload,
-            timeout=30.0
-        )
-        response.raise_for_status()
-        return response.json()
-    except httpx.TimeoutException:
-        raise HTTPException(
-            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-            detail="Toxicity service timeout"
-        )
-    except httpx.HTTPError as e:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Toxicity service error: {str(e)}"
-        )
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Cleanup al shutdown"""
+    await http_client.aclose()
+
+# ============================================
+# HELPER FUNCTIONS
+# ============================================
 
 async def check_service_health(service_url: str) -> bool:
     """Verifica se un servizio è online"""
@@ -219,14 +203,14 @@ async def check_service_health(service_url: str) -> bool:
 
 @app.get("/")
 async def root():
-    """Root endpoint con informazioni sul gateway e status dei servizi"""
+    """Root endpoint con informazioni sul gateway"""
     bert_healthy = await check_service_health(BERT_SERVICE_URL)
     toxicity_healthy = await check_service_health(TOXICITY_SERVICE_URL)
     
     return {
         "status": "ok",
-        "version": "3.0.0",
-        "architecture": "microservices",
+        "version": "3.2.0",
+        "architecture": "microservices: sentiment (abstract) + toxicity (standalone)",
         "gateway": "FastAPI Backend",
         "services": {
             "bert_sentiment": {
@@ -240,6 +224,18 @@ async def root():
                 "port": 5003
             }
         },
+        "output_formats": {
+            "sentiment": {
+                "type": "normalized (abstract pattern)",
+                "labels": ["positive", "neutral", "negative"],
+                "score_range": [0.0, 1.0]
+            },
+            "toxicity": {
+                "type": "dedicated (standalone detector)",
+                "fields": ["is_toxic", "toxicity_score", "severity"],
+                "severity_levels": ["low", "medium", "high"]
+            }
+        },
         "endpoints": {
             "meeting": [
                 "GET /meeting/{meetingId}",
@@ -251,8 +247,8 @@ async def root():
                 "POST /sentiment/batch"
             ],
             "toxicity": [
-                "POST /toxicity/analyze",
-                "POST /toxicity/batch"
+                "POST /toxicity/detect",
+                "POST /toxicity/detect/batch"
             ],
             "utility": [
                 "GET /participants",
@@ -327,17 +323,20 @@ def get_transcript_filtered(
     }
 
 # ============================================
-# ANALYSIS ENDPOINT (SENTIMENT + TOXICITY)
+# UNIFIED ANALYSIS ENDPOINT
 # ============================================
 
 @app.get("/meeting/{meetingId}/analysis")
-async def get_transcript_with_analysis(
+async def get_transcript_with_unified_analysis(
     meetingId: str,
     participant_id: Optional[str] = None
 ):
     """
-    Ottieni transcript arricchito con SENTIMENT e TOXICITY analysis.
-    Questo è l'endpoint principale per il widget board.
+    Ottieni transcript con SENTIMENT + TOXICITY analysis.
+    
+    Output formats:
+    - Sentiment: {label: positive/neutral/negative, score: 0-1}
+    - Toxicity: {is_toxic: bool, severity: low/medium/high, toxicity_score: 0-1}
     """
     # 1. Ottieni meeting
     meeting = MOCK_MEETINGS.get(meetingId)
@@ -366,6 +365,10 @@ async def get_transcript_with_analysis(
             "transcript": [],
             "metadata": {
                 "language": "en",
+                "formats": {
+                    "sentiment": "normalized (positive/neutral/negative)",
+                    "toxicity": "dedicated (is_toxic/severity/score)"
+                },
                 "stats": {
                     "total_messages": 0,
                     "sentiment": {},
@@ -374,96 +377,204 @@ async def get_transcript_with_analysis(
             }
         }
     
-    # 4. Chiama BERT Sentiment (batch)
-    sentiment_response = await call_bert_service("batch", {"texts": texts})
-    sentiments = sentiment_response["results"]
+    # 4. Sentiment prediction (batch)
+    sentiment_results = await sentiment_predictor.predict_batch(texts)
     
-    # 5. Chiama BERT Toxicity (batch)
-    toxicity_response = await call_toxicity_service("batch", {"texts": texts})
-    toxicities = toxicity_response["results"]
+    # 5. Toxicity detection (batch) - NUOVO: usa detect() non predict()
+    toxicity_results = await toxicity_detector.detect_batch(texts)
     
     # 6. Combina transcript con analisi
     enriched_transcript = []
     
-    # Stats accumulatori
-    total_stars = 0
-    positive_count = 0
+    # Stats accumulatori sentiment
+    sentiment_positive = 0
+    sentiment_neutral = 0
+    sentiment_negative = 0
+    total_sentiment_score = 0
+    
+    # Stats accumulatori toxicity (NUOVO formato)
     toxic_count = 0
-    total_toxicity = 0
+    severity_low = 0
+    severity_medium = 0
+    severity_high = 0
+    total_toxicity_score = 0
     
     for i, entry in enumerate(transcript):
+        sent_pred = sentiment_results.predictions[i]
+        tox_result = toxicity_results.results[i]  # NUOVO: result non prediction
+        
         entry_dict = entry.dict(by_alias=True)
-        entry_dict['sentiment'] = sentiments[i]
-        entry_dict['toxicity'] = toxicities[i]
+        
+        # Sentiment (formato normalizzato)
+        entry_dict['sentiment'] = {
+            'label': sent_pred.label.value,
+            'score': sent_pred.score,
+            'confidence': sent_pred.confidence,
+            'raw': sent_pred.raw_output
+        }
+        
+        # Toxicity (formato dedicato) - NUOVO
+        entry_dict['toxicity'] = {
+            'is_toxic': tox_result.is_toxic,
+            'toxicity_score': tox_result.toxicity_score,
+            'severity': tox_result.severity.value,
+            'confidence': tox_result.confidence,
+            'raw': tox_result.raw_output
+        }
         
         enriched_transcript.append(entry_dict)
         
-        # Accumula stats
-        total_stars += sentiments[i]['stars']
-        if sentiments[i]['stars'] >= 3.5:
-            positive_count += 1
-        if toxicities[i]['is_toxic']:
+        # Accumula stats sentiment
+        if sent_pred.label == SentimentLabel.POSITIVE:
+            sentiment_positive += 1
+        elif sent_pred.label == SentimentLabel.NEUTRAL:
+            sentiment_neutral += 1
+        else:
+            sentiment_negative += 1
+        total_sentiment_score += sent_pred.score
+        
+        # Accumula stats toxicity (NUOVO)
+        if tox_result.is_toxic:
             toxic_count += 1
-        total_toxicity += toxicities[i]['toxicity_score']
+        
+        if tox_result.severity == ToxicitySeverity.LOW:
+            severity_low += 1
+        elif tox_result.severity == ToxicitySeverity.MEDIUM:
+            severity_medium += 1
+        else:
+            severity_high += 1
+        
+        total_toxicity_score += tox_result.toxicity_score
     
     # 7. Calcola statistiche aggregate
-    num_messages = len(sentiments)
-    avg_stars = total_stars / num_messages
-    positive_ratio = positive_count / num_messages
-    toxic_ratio = toxic_count / num_messages
-    avg_toxicity = total_toxicity / num_messages
+    num_messages = len(sentiment_results.predictions)
     
     return {
         "transcript": enriched_transcript,
         "metadata": {
             "language": "en",
+            "formats": {
+                "sentiment": "normalized (positive/neutral/negative, score 0-1)",
+                "toxicity": "dedicated (is_toxic bool, severity low/medium/high, score 0-1)"
+            },
             "stats": {
                 "total_messages": num_messages,
                 "sentiment": {
-                    "average_stars": round(avg_stars, 2),
-                    "positive_ratio": round(positive_ratio, 2),
-                    "positive_count": positive_count
+                    "distribution": {
+                        "positive": sentiment_positive,
+                        "neutral": sentiment_neutral,
+                        "negative": sentiment_negative
+                    },
+                    "average_score": round(total_sentiment_score / num_messages, 3),
+                    "positive_ratio": round(sentiment_positive / num_messages, 3)
                 },
                 "toxicity": {
-                    "toxic_ratio": round(toxic_ratio, 2),
                     "toxic_count": toxic_count,
-                    "average_toxicity": round(avg_toxicity, 3)
+                    "toxic_ratio": round(toxic_count / num_messages, 3),
+                    "severity_distribution": {
+                        "low": severity_low,
+                        "medium": severity_medium,
+                        "high": severity_high
+                    },
+                    "average_toxicity_score": round(total_toxicity_score / num_messages, 3)
                 }
             }
         }
     }
 
 # ============================================
-# SENTIMENT ENDPOINTS
+# SENTIMENT + TOXICITY ENDPOINTS
 # ============================================
 
-@app.post("/sentiment/analyze")
-async def analyze_sentiment(request: SentimentAnalysisRequest):
-    """Analizza sentiment di un singolo testo"""
-    result = await call_bert_service("analyze", {"text": request.text})
-    return result
+# SENTIMENT (Abstract Pattern)
+@app.post("/sentiment/analyze", response_model=NormalizedPrediction)
+async def analyze_sentiment(request: UnifiedAnalysisRequest):
+    """
+    Analizza sentiment di un singolo testo.
+    
+    Output normalizzato: {label: positive/neutral/negative, score: 0-1}
+    """
+    if not sentiment_predictor:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Sentiment predictor not initialized"
+        )
+    
+    try:
+        result = await sentiment_predictor.predict(request.text)
+        return result
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Sentiment prediction error: {str(e)}"
+        )
 
-@app.post("/sentiment/batch")
-async def analyze_sentiment_batch(request: BatchSentimentRequest):
-    """Analizza sentiment per batch di testi"""
-    result = await call_bert_service("batch", {"texts": request.texts})
-    return result
+@app.post("/sentiment/batch", response_model=BatchNormalizedPrediction)
+async def analyze_sentiment_batch(request: BatchUnifiedAnalysisRequest):
+    """Batch prediction sentiment"""
+    if not sentiment_predictor:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Sentiment predictor not initialized"
+        )
+    
+    try:
+        result = await sentiment_predictor.predict_batch(request.texts)
+        return result
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Sentiment batch prediction error: {str(e)}"
+        )
 
-# ============================================
-# TOXICITY ENDPOINTS
-# ============================================
+# TOXICITY (Standalone Detector)
+@app.post("/toxicity/detect", response_model=ToxicityResult)
+async def detect_toxicity(request: ToxicityAnalysisRequest):
+    """
+    Rileva tossicità di un singolo testo.
+    
+    Output dedicato:
+    - is_toxic: boolean (True se score > 0.5)
+    - severity: low/medium/high
+    - toxicity_score: 0-1
+    - confidence: 0-1
+    """
+    if not toxicity_detector:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Toxicity detector not initialized"
+        )
+    
+    try:
+        result = await toxicity_detector.detect(request.text)
+        return result
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Toxicity detection error: {str(e)}"
+        )
 
-@app.post("/toxicity/analyze")
-async def analyze_toxicity(request: ToxicityAnalysisRequest):
-    """Analizza toxicity di un singolo testo"""
-    result = await call_toxicity_service("analyze", {"text": request.text})
-    return result
-
-@app.post("/toxicity/batch")
-async def analyze_toxicity_batch(request: BatchToxicityRequest):
-    """Analizza toxicity per batch di testi"""
-    result = await call_toxicity_service("batch", {"texts": request.texts})
-    return result
+@app.post("/toxicity/detect/batch", response_model=BatchToxicityResult)
+async def detect_toxicity_batch(request: BatchToxicityRequest):
+    """
+    Rileva tossicità per batch di testi.
+    
+    Batch processing è ~10x più veloce di chiamate singole.
+    """
+    if not toxicity_detector:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Toxicity detector not initialized"
+        )
+    
+    try:
+        result = await toxicity_detector.detect_batch(request.texts)
+        return result
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Toxicity batch detection error: {str(e)}"
+        )
 
 # ============================================
 # UTILITY ENDPOINTS
@@ -517,13 +628,17 @@ async def get_services_status():
             "healthy": bert_healthy,
             "url": BERT_SERVICE_URL,
             "port": 5001,
-            "info": bert_info
+            "info": bert_info,
+            "predictor": "SentimentPredictor",
+            "output_format": "positive/neutral/negative (score 0-1)"
         },
         "bert_toxicity": {
             "healthy": toxicity_healthy,
             "url": TOXICITY_SERVICE_URL,
             "port": 5003,
-            "info": toxicity_info
+            "info": toxicity_info,
+            "predictor": "ToxicityPredictor",
+            "output_format": "positive/neutral/negative (score 0-1)"
         }
     }
 
@@ -536,12 +651,3 @@ def get_config():
         "meetings": MEETINGS_CONFIG,
         "generation": GENERATION_CONFIG
     }
-
-# ============================================
-# SHUTDOWN HANDLER
-# ============================================
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Cleanup al shutdown"""
-    await http_client.aclose()
