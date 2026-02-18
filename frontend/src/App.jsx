@@ -44,7 +44,7 @@ function App() {
     messageStream: {
       participantFilter: null,
       color: '#FF2D55',
-      limit: 8,
+      limit: 30,
       showTimestamps: true
     }
   })
@@ -505,8 +505,8 @@ function WidgetSettings({ config, participants, onConfigChange }) {
           <span style={styles.settingLabel}>Message Limit</span>
           <input
             type="number"
-            min="3"
-            max="20"
+            min="5"
+            max="100"
             value={config.limit}
             onChange={(e) =>
               onConfigChange({ limit: parseInt(e.target.value) })
@@ -706,9 +706,12 @@ const styles = {
     position: 'sticky',
     top: 0,
     zIndex: 100,
-    backgroundColor: '#2c2c2e',
-    borderBottom: '1px solid #3a3a3c',
-    padding: '1rem 0'
+    backgroundColor: 'rgba(28, 28, 30, 0.85)',
+    backdropFilter: 'saturate(180%) blur(20px)',
+    WebkitBackdropFilter: 'saturate(180%) blur(20px)',
+    borderBottom: '0.5px solid rgba(255, 255, 255, 0.1)',
+    padding: '1.25rem 0',
+    boxShadow: '0 4px 16px rgba(0, 0, 0, 0.3)'
   },
   headerContent: {
     maxWidth: '1400px',
@@ -721,32 +724,35 @@ const styles = {
   headerLeft: {
     display: 'flex',
     alignItems: 'center',
-    gap: '1rem'
+    gap: '1.25rem'
   },
   logoCircle: {
-    width: '50px',
-    height: '50px',
-    borderRadius: '12px',
+    width: '56px',
+    height: '56px',
+    borderRadius: '14px',
     background: 'linear-gradient(135deg, #FF3B30 0%, #FF9500 100%)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    fontSize: '1.2rem',
+    fontSize: '1.4rem',
     fontWeight: '700',
     color: '#fff',
-    boxShadow: '0 4px 12px rgba(255, 59, 48, 0.4)'
+    boxShadow: '0 8px 24px rgba(255, 59, 48, 0.5)',
+    transition: 'transform 0.3s ease'
   },
   title: {
     margin: 0,
-    fontSize: '1.4rem',
+    fontSize: '1.5rem',
     fontWeight: '700',
-    color: '#fff'
+    color: '#fff',
+    letterSpacing: '-0.02em'
   },
   subtitle: {
     margin: 0,
-    fontSize: '0.85rem',
+    fontSize: '0.9rem',
     color: '#8e8e93',
-    fontWeight: '500'
+    fontWeight: '500',
+    letterSpacing: '-0.01em'
   },
 
   // ERROR & LOADING
@@ -798,20 +804,22 @@ const styles = {
   widgetGrid: {
     maxWidth: '1400px',
     margin: '0 auto',
-    padding: '2rem',
+    padding: '2.5rem 2rem',
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-    gap: '1.25rem'
+    gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+    gap: '1.5rem'
   },
 
   // iOS WIDGET CARD
   iosWidget: {
-    borderRadius: '20px',
-    padding: '1.5rem',
-    backgroundColor: '#2c2c2e',
-    border: '1px solid #3a3a3c',
-    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
-    transition: 'transform 0.2s ease, box-shadow 0.2s ease'
+    borderRadius: '24px',
+    padding: '1.75rem',
+    backgroundColor: 'rgba(44, 44, 46, 0.6)',
+    backdropFilter: 'blur(20px)',
+    WebkitBackdropFilter: 'blur(20px)',
+    border: '0.5px solid rgba(255, 255, 255, 0.08)',
+    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3)',
+    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
   },
   wideWidget: {
     gridColumn: 'span 2'
@@ -820,91 +828,105 @@ const styles = {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: '1.25rem'
+    marginBottom: '1.5rem',
+    paddingBottom: '0.75rem',
+    borderBottom: '0.5px solid rgba(255, 255, 255, 0.06)'
   },
   widgetTitle: {
-    fontSize: '1rem',
+    fontSize: '1.05rem',
     fontWeight: '600',
     color: '#fff',
-    letterSpacing: '0.02em'
+    letterSpacing: '-0.01em'
   },
   headerActions: {
     display: 'flex',
     alignItems: 'center',
-    gap: '0.75rem'
+    gap: '0.875rem'
   },
   widgetDot: {
-    width: '12px',
-    height: '12px',
-    borderRadius: '6px',
-    boxShadow: '0 0 8px currentColor'
+    width: '10px',
+    height: '10px',
+    borderRadius: '5px',
+    boxShadow: '0 0 12px currentColor, 0 0 4px currentColor'
   },
   settingsButton: {
-    width: '32px',
-    height: '32px',
-    borderRadius: '8px',
+    width: '34px',
+    height: '34px',
+    borderRadius: '10px',
     border: 'none',
-    backgroundColor: '#3a3a3c',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
     color: '#fff',
-    fontSize: '1.2rem',
+    fontSize: '1.3rem',
     fontWeight: '600',
     cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    transition: 'all 0.2s ease'
+    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
   },
   widgetContent: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '1rem'
+    gap: '1.25rem'
   },
 
   // SETTINGS PANEL
   settingsPanel: {
-    marginBottom: '1.25rem',
-    padding: '1rem',
-    borderRadius: '12px',
-    backgroundColor: '#1c1c1e',
-    border: '1px solid #3a3a3c',
+    marginBottom: '1.5rem',
+    padding: '1.25rem',
+    borderRadius: '16px',
+    backgroundColor: 'rgba(28, 28, 30, 0.8)',
+    backdropFilter: 'blur(10px)',
+    WebkitBackdropFilter: 'blur(10px)',
+    border: '0.5px solid rgba(255, 255, 255, 0.08)',
     display: 'flex',
     flexDirection: 'column',
     gap: '1rem',
-    animation: 'slideDown 0.3s ease'
+    animation: 'slideDown 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+    boxShadow: '0 4px 16px rgba(0, 0, 0, 0.3)'
   },
   settingRow: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    gap: '1rem'
+    gap: '1rem',
+    padding: '0.5rem 0'
   },
   settingLabel: {
-    fontSize: '0.85rem',
+    fontSize: '0.9rem',
     fontWeight: '500',
-    color: '#8e8e93'
+    color: '#8e8e93',
+    letterSpacing: '-0.01em'
   },
   settingSelect: {
-    padding: '0.5rem 0.75rem',
-    fontSize: '0.85rem',
-    borderRadius: '8px',
-    border: '1px solid #3a3a3c',
-    backgroundColor: '#2c2c2e',
+    padding: '0.625rem 1rem',
+    fontSize: '0.875rem',
+    borderRadius: '10px',
+    border: '0.5px solid rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(44, 44, 46, 0.6)',
+    backdropFilter: 'blur(10px)',
+    WebkitBackdropFilter: 'blur(10px)',
     color: '#fff',
     outline: 'none',
     fontWeight: '500',
     cursor: 'pointer',
-    minWidth: '120px'
+    minWidth: '140px',
+    transition: 'all 0.2s ease'
   },
   numberInput: {
-    padding: '0.5rem 0.75rem',
-    fontSize: '0.85rem',
-    borderRadius: '8px',
-    border: '1px solid #3a3a3c',
-    backgroundColor: '#2c2c2e',
+    padding: '0.625rem 1rem',
+    fontSize: '0.875rem',
+    borderRadius: '10px',
+    border: '0.5px solid rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(44, 44, 46, 0.6)',
+    backdropFilter: 'blur(10px)',
+    WebkitBackdropFilter: 'blur(10px)',
     color: '#fff',
     outline: 'none',
     fontWeight: '500',
-    width: '80px'
+    width: '90px',
+    textAlign: 'center',
+    transition: 'all 0.2s ease'
   },
 
   // COLOR PICKER
@@ -949,51 +971,64 @@ const styles = {
 
   // KPI
   kpiValue: {
-    fontSize: '3rem',
+    fontSize: '3.5rem',
     fontWeight: '700',
     color: '#fff',
     textAlign: 'center',
-    lineHeight: '1'
+    lineHeight: '1',
+    letterSpacing: '-0.03em',
+    textShadow: '0 2px 8px rgba(0, 0, 0, 0.3)'
   },
   kpiLabel: {
-    fontSize: '0.85rem',
+    fontSize: '0.9rem',
     fontWeight: '500',
     color: '#8e8e93',
-    textAlign: 'center'
+    textAlign: 'center',
+    letterSpacing: '-0.01em',
+    marginTop: '0.5rem'
   },
 
   // DISTRIBUTION
   distributionContainer: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '1.25rem'
+    gap: '1.5rem'
   },
   barContainer: {
     display: 'flex',
-    height: '32px',
-    borderRadius: '16px',
+    height: '40px',
+    borderRadius: '20px',
     overflow: 'hidden',
-    boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.4)'
+    boxShadow: 'inset 0 3px 8px rgba(0, 0, 0, 0.4)',
+    border: '0.5px solid rgba(255, 255, 255, 0.06)'
   },
   legendContainer: {
     display: 'grid',
     gridTemplateColumns: 'repeat(3, 1fr)',
-    gap: '0.75rem'
+    gap: '1rem'
   },
   legendItem: {
     display: 'flex',
     alignItems: 'center',
-    gap: '0.5rem'
+    gap: '0.625rem',
+    padding: '0.5rem',
+    borderRadius: '10px',
+    backgroundColor: 'rgba(28, 28, 30, 0.4)',
+    backdropFilter: 'blur(5px)',
+    WebkitBackdropFilter: 'blur(5px)',
+    transition: 'all 0.2s ease'
   },
   legendDot: {
-    width: '10px',
-    height: '10px',
-    borderRadius: '5px'
+    width: '12px',
+    height: '12px',
+    borderRadius: '6px',
+    boxShadow: '0 0 8px currentColor'
   },
   legendText: {
-    fontSize: '0.8rem',
+    fontSize: '0.85rem',
     fontWeight: '500',
-    color: '#8e8e93'
+    color: '#8e8e93',
+    letterSpacing: '-0.01em'
   },
 
   // GAUGE
@@ -1002,114 +1037,133 @@ const styles = {
     flexDirection: 'column',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: '1rem',
-    padding: '1rem 0'
+    gap: '1.25rem',
+    padding: '1.5rem 0'
   },
   gaugeCircle: {
-    width: '160px',
-    height: '160px',
-    borderRadius: '80px',
-    border: '12px solid',
+    width: '180px',
+    height: '180px',
+    borderRadius: '90px',
+    border: '14px solid',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
-    boxShadow: '0 0 20px currentColor'
+    boxShadow: '0 0 30px currentColor, inset 0 0 20px rgba(0, 0, 0, 0.3)',
+    transition: 'all 0.3s ease'
   },
   gaugeInner: {
     textAlign: 'center'
   },
   gaugeValue: {
-    fontSize: '2.5rem',
-    fontWeight: '700'
+    fontSize: '2.75rem',
+    fontWeight: '700',
+    letterSpacing: '-0.02em',
+    textShadow: '0 2px 8px rgba(0, 0, 0, 0.3)'
   },
   gaugeLabel: {
-    fontSize: '0.75rem',
+    fontSize: '0.8rem',
     fontWeight: '600',
     color: '#8e8e93',
-    letterSpacing: '1px',
-    marginTop: '0.25rem'
+    letterSpacing: '1.5px',
+    marginTop: '0.375rem',
+    textTransform: 'uppercase'
   },
   gaugeDetails: {
     width: '100%',
     display: 'flex',
     flexDirection: 'column',
-    gap: '0.5rem'
+    gap: '0.625rem'
   },
   detailItem: {
     display: 'flex',
     justifyContent: 'space-between',
-    padding: '0.5rem 1rem',
-    borderRadius: '8px',
-    backgroundColor: '#1c1c1e'
+    padding: '0.75rem 1.25rem',
+    borderRadius: '12px',
+    backgroundColor: 'rgba(28, 28, 30, 0.6)',
+    backdropFilter: 'blur(10px)',
+    WebkitBackdropFilter: 'blur(10px)',
+    border: '0.5px solid rgba(255, 255, 255, 0.06)'
   },
   detailLabel: {
-    fontSize: '0.8rem',
+    fontSize: '0.85rem',
     fontWeight: '500',
-    color: '#8e8e93'
+    color: '#8e8e93',
+    letterSpacing: '-0.01em'
   },
   detailValue: {
-    fontSize: '0.9rem',
+    fontSize: '0.95rem',
     fontWeight: '600',
-    color: '#fff'
+    color: '#fff',
+    letterSpacing: '-0.01em'
   },
 
   // MESSAGE STREAM
   messageStreamContainer: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '0.75rem',
-    maxHeight: '400px',
-    overflowY: 'auto'
+    gap: '0.875rem',
+    maxHeight: '600px',
+    overflowY: 'auto',
+    paddingRight: '0.5rem'
   },
   messageBubble: {
-    padding: '0.75rem',
-    borderRadius: '12px',
-    backgroundColor: '#1c1c1e',
-    border: '1px solid #3a3a3c',
-    transition: 'all 0.2s ease'
+    padding: '1rem 1.25rem',
+    borderRadius: '16px',
+    backgroundColor: 'rgba(28, 28, 30, 0.6)',
+    backdropFilter: 'blur(10px)',
+    WebkitBackdropFilter: 'blur(10px)',
+    border: '0.5px solid rgba(255, 255, 255, 0.06)',
+    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)'
   },
   bubbleHeader: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: '0.5rem'
+    marginBottom: '0.625rem'
   },
   bubbleAuthor: {
-    fontSize: '0.85rem',
+    fontSize: '0.9rem',
     fontWeight: '600',
-    color: '#fff'
+    color: '#fff',
+    letterSpacing: '-0.01em'
   },
   bubbleBadges: {
     display: 'flex',
     gap: '0.5rem'
   },
   sentimentBadge: {
-    fontSize: '0.7rem',
+    fontSize: '0.75rem',
     fontWeight: '700',
     color: '#000',
-    padding: '0.25rem 0.5rem',
-    borderRadius: '6px'
+    padding: '0.3rem 0.6rem',
+    borderRadius: '8px',
+    letterSpacing: '0.02em'
   },
   toxicBadge: {
     fontSize: '0.7rem',
     fontWeight: '700',
     color: '#fff',
-    padding: '0.25rem 0.5rem',
-    borderRadius: '6px'
+    padding: '0.3rem 0.6rem',
+    borderRadius: '8px',
+    letterSpacing: '0.5px',
+    textTransform: 'uppercase'
   },
   bubbleText: {
     margin: 0,
-    fontSize: '0.85rem',
-    lineHeight: '1.5',
-    color: '#d1d1d6'
+    fontSize: '0.9rem',
+    lineHeight: '1.6',
+    color: '#d1d1d6',
+    letterSpacing: '-0.01em'
   },
   bubbleTime: {
     display: 'block',
-    marginTop: '0.5rem',
-    fontSize: '0.7rem',
+    marginTop: '0.625rem',
+    fontSize: '0.75rem',
     fontWeight: '500',
-    color: '#636366'
+    color: '#636366',
+    letterSpacing: '0.02em'
   },
 
   // EMPTY STATE
@@ -1140,29 +1194,35 @@ styleSheet.textContent = `
   }
 }
 
-/* Widget hover effects */
+/* Widget hover effects - Premium */
 div[style*="iosWidget"]:hover {
-  transform: translateY(-4px);
+  transform: translateY(-6px);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6), 0 4px 12px rgba(0, 0, 0, 0.4);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+/* Logo hover */
+div[style*="logoCircle"]:hover {
+  transform: scale(1.05) rotate(5deg);
 }
 
 /* Settings button hover */
-button:hover {
-  transform: scale(1.05);
+button[style*="settingsButton"]:hover {
+  background-color: rgba(255, 255, 255, 0.15);
+  transform: scale(1.08);
 }
 
-button:active {
-  transform: scale(0.95);
-}
-
-/* Color button hover */
-button[style*="colorButton"]:hover {
-  transform: scale(1.15);
+button[style*="settingsButton"]:active {
+  transform: scale(0.96);
+  background-color: rgba(255, 255, 255, 0.12);
 }
 
 /* Message bubble hover */
 div[style*="messageBubble"]:hover {
-  background-color: #2c2c2e;
-  border-color: #48484a;
+  background-color: rgba(44, 44, 46, 0.6);
+  border-color: rgba(255, 255, 255, 0.1);
+  transform: translateX(4px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
 }
 
 /* Toggle switch animation */
@@ -1174,8 +1234,8 @@ input[type="checkbox"]:checked + span::after {
   background-color: white;
   border-radius: 12px;
   right: 2px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 input[type="checkbox"]:not(:checked) + span::after {
@@ -1186,28 +1246,86 @@ input[type="checkbox"]:not(:checked) + span::after {
   background-color: white;
   border-radius: 12px;
   left: 2px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Scrollbar styling */
+/* Scrollbar styling - Premium */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #1c1c1e;
-  border-radius: 4px;
+  background: rgba(28, 28, 30, 0.4);
+  border-radius: 5px;
+  margin: 4px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #3a3a3c;
-  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #48484a;
+  background: rgba(255, 255, 255, 0.25);
+  background-clip: padding-box;
+}
+
+/* Select hover */
+select[style*="settingSelect"]:hover {
+  background-color: rgba(44, 44, 46, 0.8);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* Input hover */
+input[type="number"]:hover {
+  background-color: rgba(44, 44, 46, 0.8);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+input[type="number"]:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.3);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.05);
+}
+
+select:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.3);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.05);
+}
+
+/* Badge animations */
+span[style*="sentimentBadge"] {
+  transition: all 0.2s ease;
+}
+
+span[style*="sentimentBadge"]:hover {
+  transform: scale(1.1);
+  box-shadow: 0 2px 8px currentColor;
+}
+
+span[style*="toxicBadge"] {
+  transition: all 0.2s ease;
+}
+
+span[style*="toxicBadge"]:hover {
+  transform: scale(1.1);
+  box-shadow: 0 2px 8px currentColor;
+}
+
+/* Legend item hover */
+div[style*="legendItem"]:hover {
+  background-color: rgba(44, 44, 46, 0.6);
+  transform: translateX(4px);
+}
+
+/* Gauge hover */
+div[style*="gaugeCircle"]:hover {
+  transform: scale(1.05);
 }
 `
 document.head.appendChild(styleSheet)
