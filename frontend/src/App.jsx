@@ -41,6 +41,13 @@ function App() {
       color: '#5856D6',
       showDetails: true
     },
+    timeline: {
+      participantFilter: null,
+      color: '#00C7BE',
+      showGrid: true,
+      showArea: true,
+      metric: 'sentiment' // 'sentiment' or 'toxicity'
+    },
     messageStream: {
       participantFilter: null,
       color: '#FF2D55',
@@ -290,6 +297,28 @@ function App() {
             })()}
           </CustomizableWidget>
 
+          {/* Timeline Widget - Wide */}
+          <CustomizableWidget
+            widgetId="timeline"
+            title={widgetConfigs.timeline.metric === 'sentiment' ? 'Sentiment Timeline' : 'Toxicity Timeline'}
+            config={widgetConfigs.timeline}
+            participants={participants}
+            onConfigChange={(updates) => updateWidgetConfig('timeline', updates)}
+            openSettings={openSettings}
+            setOpenSettings={setOpenSettings}
+            wide
+          >
+            {(() => {
+              const data = getFilteredTranscript('timeline')
+              return (
+                <TimelineChart
+                  messages={data}
+                  config={widgetConfigs.timeline}
+                />
+              )
+            })()}
+          </CustomizableWidget>
+
           {/* Toxicity Gauge */}
           <CustomizableWidget
             widgetId="toxicityGauge"
@@ -500,6 +529,64 @@ function WidgetSettings({ config, participants, onConfigChange }) {
         </div>
       )}
 
+      {config.metric !== undefined && (
+        <div style={styles.settingRow}>
+          <span style={styles.settingLabel}>Metric</span>
+          <select
+            value={config.metric}
+            onChange={(e) => onConfigChange({ metric: e.target.value })}
+            style={styles.settingSelect}
+          >
+            <option value="sentiment">Sentiment</option>
+            <option value="toxicity">Toxicity (Inverted)</option>
+          </select>
+        </div>
+      )}
+
+      {config.showGrid !== undefined && (
+        <div style={styles.settingRow}>
+          <span style={styles.settingLabel}>Show Grid</span>
+          <label style={styles.toggleSwitch}>
+            <input
+              type="checkbox"
+              checked={config.showGrid}
+              onChange={(e) =>
+                onConfigChange({ showGrid: e.target.checked })
+              }
+              style={styles.toggleInput}
+            />
+            <span
+              style={{
+                ...styles.toggleSlider,
+                backgroundColor: config.showGrid ? config.color : '#3a3a3c'
+              }}
+            />
+          </label>
+        </div>
+      )}
+
+      {config.showArea !== undefined && (
+        <div style={styles.settingRow}>
+          <span style={styles.settingLabel}>Show Area</span>
+          <label style={styles.toggleSwitch}>
+            <input
+              type="checkbox"
+              checked={config.showArea}
+              onChange={(e) =>
+                onConfigChange({ showArea: e.target.checked })
+              }
+              style={styles.toggleInput}
+            />
+            <span
+              style={{
+                ...styles.toggleSlider,
+                backgroundColor: config.showArea ? config.color : '#3a3a3c'
+              }}
+            />
+          </label>
+        </div>
+      )}
+
       {config.limit !== undefined && (
         <div style={styles.settingRow}>
           <span style={styles.settingLabel}>Message Limit</span>
@@ -684,6 +771,215 @@ function MessageBubble({ message, config }) {
       <p style={styles.bubbleText}>{message.text}</p>
       {config.showTimestamps && (
         <span style={styles.bubbleTime}>{message.from}</span>
+      )}
+    </div>
+  )
+}
+
+// ============================================
+// TIMELINE CHART
+// ============================================
+
+function TimelineChart({ messages, config }) {
+  const [hoveredPoint, setHoveredPoint] = useState(null)
+  
+  if (!messages || messages.length === 0) {
+    return <div style={styles.emptyState}>No data</div>
+  }
+
+  // Dimensioni chart
+  const width = 800
+  const height = 300
+  const padding = { top: 20, right: 20, bottom: 50, left: 60 }
+  const chartWidth = width - padding.left - padding.right
+  const chartHeight = height - padding.top - padding.bottom
+
+  // Prepara dati per il grafico
+  const dataPoints = messages.map((msg, idx) => {
+    const score = config.metric === 'sentiment' 
+      ? msg.sentiment.score 
+      : (1 - msg.toxicity.toxicity_score) // Invertiamo toxicity per visualizzare meglio
+    
+    return {
+      index: idx,
+      score: score,
+      timestamp: msg.from,
+      message: msg.text,
+      nickname: msg.nickname
+    }
+  })
+
+  // Scale
+  const xScale = (index) => padding.left + (index / (dataPoints.length - 1)) * chartWidth
+  const yScale = (score) => padding.top + (1 - score) * chartHeight
+
+  // Genera path per la linea
+  const linePath = dataPoints.map((point, idx) => {
+    const x = xScale(point.index)
+    const y = yScale(point.score)
+    return idx === 0 ? `M ${x} ${y}` : `L ${x} ${y}`
+  }).join(' ')
+
+  // Genera path per l'area sotto la linea
+  const areaPath = config.showArea ? 
+    `${linePath} L ${xScale(dataPoints.length - 1)} ${padding.top + chartHeight} L ${padding.left} ${padding.top + chartHeight} Z`
+    : null
+
+  // Colore basato su metric
+  const lineColor = config.metric === 'sentiment' ? '#00C7BE' : '#FF9500'
+  
+  // Media per riferimento
+  const avgScore = dataPoints.reduce((sum, p) => sum + p.score, 0) / dataPoints.length
+
+  return (
+    <div style={styles.timelineContainer}>
+      <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`}>
+        {/* Griglia di sfondo */}
+        {config.showGrid && (
+          <g>
+            {[0, 0.25, 0.5, 0.75, 1].map((value) => (
+              <line
+                key={value}
+                x1={padding.left}
+                y1={yScale(value)}
+                x2={padding.left + chartWidth}
+                y2={yScale(value)}
+                stroke="rgba(255, 255, 255, 0.05)"
+                strokeWidth="1"
+              />
+            ))}
+          </g>
+        )}
+
+        {/* Linea media */}
+        <line
+          x1={padding.left}
+          y1={yScale(avgScore)}
+          x2={padding.left + chartWidth}
+          y2={yScale(avgScore)}
+          stroke="rgba(255, 255, 255, 0.2)"
+          strokeWidth="1"
+          strokeDasharray="4 4"
+        />
+        <text
+          x={padding.left + chartWidth + 5}
+          y={yScale(avgScore)}
+          fill="#8e8e93"
+          fontSize="10"
+          alignmentBaseline="middle"
+        >
+          avg
+        </text>
+
+        {/* Area sotto la linea */}
+        {areaPath && (
+          <path
+            d={areaPath}
+            fill={`url(#gradient-${config.metric})`}
+            opacity="0.2"
+          />
+        )}
+
+        {/* Gradient definition */}
+        <defs>
+          <linearGradient id={`gradient-${config.metric}`} x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor={lineColor} stopOpacity="0.8" />
+            <stop offset="100%" stopColor={lineColor} stopOpacity="0" />
+          </linearGradient>
+        </defs>
+
+        {/* Linea principale */}
+        <path
+          d={linePath}
+          fill="none"
+          stroke={lineColor}
+          strokeWidth="3"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          style={{ filter: `drop-shadow(0 0 8px ${lineColor})` }}
+        />
+
+        {/* Punti interattivi */}
+        {dataPoints.map((point, idx) => {
+          const x = xScale(point.index)
+          const y = yScale(point.score)
+          const isHovered = hoveredPoint === idx
+          
+          return (
+            <g key={idx}>
+              <circle
+                cx={x}
+                cy={y}
+                r={isHovered ? 6 : 4}
+                fill={lineColor}
+                stroke="#1c1c1e"
+                strokeWidth="2"
+                style={{ 
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  filter: isHovered ? `drop-shadow(0 0 8px ${lineColor})` : 'none'
+                }}
+                onMouseEnter={() => setHoveredPoint(idx)}
+                onMouseLeave={() => setHoveredPoint(null)}
+              />
+            </g>
+          )
+        })}
+
+        {/* Asse Y labels */}
+        {[0, 0.25, 0.5, 0.75, 1].map((value) => (
+          <text
+            key={value}
+            x={padding.left - 10}
+            y={yScale(value)}
+            fill="#8e8e93"
+            fontSize="11"
+            textAnchor="end"
+            alignmentBaseline="middle"
+          >
+            {(value * 100).toFixed(0)}%
+          </text>
+        ))}
+
+        {/* Asse X labels (ogni 5 messaggi) */}
+        {dataPoints
+          .filter((_, idx) => idx % 5 === 0 || idx === dataPoints.length - 1)
+          .map((point, idx) => {
+            const x = xScale(point.index)
+            return (
+              <text
+                key={idx}
+                x={x}
+                y={padding.top + chartHeight + 20}
+                fill="#8e8e93"
+                fontSize="10"
+                textAnchor="middle"
+              >
+                {point.timestamp.split(':').slice(0, 2).join(':')}
+              </text>
+            )
+          })}
+      </svg>
+
+      {/* Tooltip on hover */}
+      {hoveredPoint !== null && (
+        <div style={styles.tooltip}>
+          <div style={styles.tooltipHeader}>
+            <strong>{dataPoints[hoveredPoint].nickname}</strong>
+            <span style={{ color: '#8e8e93', fontSize: '0.8rem' }}>
+              {dataPoints[hoveredPoint].timestamp}
+            </span>
+          </div>
+          <div style={styles.tooltipScore}>
+            Score: <strong style={{ color: lineColor }}>
+              {(dataPoints[hoveredPoint].score * 100).toFixed(0)}%
+            </strong>
+          </div>
+          <div style={styles.tooltipMessage}>
+            "{dataPoints[hoveredPoint].message.substring(0, 60)}
+            {dataPoints[hoveredPoint].message.length > 60 ? '...' : ''}"
+          </div>
+        </div>
       )}
     </div>
   )
@@ -1173,6 +1469,46 @@ const styles = {
     color: '#8e8e93',
     fontSize: '0.9rem',
     fontWeight: '500'
+  },
+
+  // TIMELINE CHART
+  timelineContainer: {
+    position: 'relative',
+    padding: '1rem 0'
+  },
+  tooltip: {
+    position: 'absolute',
+    top: '10px',
+    right: '10px',
+    backgroundColor: 'rgba(28, 28, 30, 0.95)',
+    backdropFilter: 'blur(10px)',
+    WebkitBackdropFilter: 'blur(10px)',
+    border: '0.5px solid rgba(255, 255, 255, 0.1)',
+    borderRadius: '12px',
+    padding: '1rem',
+    minWidth: '220px',
+    maxWidth: '300px',
+    boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
+    zIndex: 10
+  },
+  tooltipHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '0.5rem',
+    paddingBottom: '0.5rem',
+    borderBottom: '0.5px solid rgba(255, 255, 255, 0.08)'
+  },
+  tooltipScore: {
+    fontSize: '0.85rem',
+    color: '#d1d1d6',
+    marginBottom: '0.5rem'
+  },
+  tooltipMessage: {
+    fontSize: '0.8rem',
+    color: '#8e8e93',
+    fontStyle: 'italic',
+    lineHeight: '1.4'
   }
 }
 
