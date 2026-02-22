@@ -248,10 +248,14 @@ class ToxicityDetector:
         self.threshold = 0.5  # Soglia per is_toxic
     
     def _get_severity(self, score: float) -> ToxicitySeverity:
-        """Determina severity level da score"""
-        if score < 0.3:
+        """
+        Determina severity level da score.
+        
+        Thresholds più conservativi per evitare false positive.
+        """
+        if score < 0.4:  # Era 0.3 - più permissivo
             return ToxicitySeverity.LOW
-        elif score < 0.6:
+        elif score < 0.7:  # Era 0.6 - più permissivo
             return ToxicitySeverity.MEDIUM
         else:
             return ToxicitySeverity.HIGH

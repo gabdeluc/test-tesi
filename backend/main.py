@@ -123,7 +123,12 @@ PARTICIPANTS = [Participant(**p) for p in PARTICIPANTS_CONFIG]
 # ============================================
 
 def generate_mock_transcript(num_entries: int = 20) -> List[TranscriptEntry]:
-    """Genera transcript mock usando configurazione"""
+    """
+    Genera transcript mock con messaggi completamente random.
+    
+    Pesca casualmente da TUTTE le categorie del dataset (positive, neutral, toxic, ecc.)
+    per simulare una riunione realistica con variazioni naturali.
+    """
     transcript = []
     current_time = 0
     
@@ -133,7 +138,7 @@ def generate_mock_transcript(num_entries: int = 20) -> List[TranscriptEntry]:
     
     for i in range(num_entries):
         participant = random.choice(PARTICIPANTS)
-        text = random.choice(SAMPLE_PHRASES)
+        text = random.choice(SAMPLE_PHRASES)  # Completamente random dal pool
         duration = max(min_duration, len(text) // chars_per_sec)
         
         from_time = f"{current_time // 3600:02d}:{(current_time % 3600) // 60:02d}:{current_time % 60:02d}.000"
@@ -156,6 +161,7 @@ def generate_mock_transcript(num_entries: int = 20) -> List[TranscriptEntry]:
 MOCK_MEETINGS = {}
 for meeting_config in MEETINGS_CONFIG:
     meeting_id = meeting_config['id']
+    
     MOCK_MEETINGS[meeting_id] = {
         "metadata": MeetingMetadata(
             participants=PARTICIPANTS,
@@ -650,4 +656,64 @@ def get_config():
         "participants": [p.dict() for p in PARTICIPANTS],
         "meetings": MEETINGS_CONFIG,
         "generation": GENERATION_CONFIG
+    }
+
+# ============================================
+# DEBUG ENDPOINTS
+# ============================================
+
+@app.post("/debug/toxicity-test")
+async def debug_toxicity_test():
+    """
+    Test toxicity model su frasi problematiche.
+    
+    Usato per identificare false positive e verificare threshold.
+    """
+    if not toxicity_detector:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Toxicity detector not initialized"
+        )
+    
+    test_phrases = [
+        # Frasi innocue che NON dovrebbero essere tossiche
+        "Let me share my screen to show the dashboard.",
+        "Can everyone see the slides properly?",
+        "I'll send the document via email after this.",
+        "Great work everyone!",
+        "Thank you for your time.",
+        
+        # Frasi borderline
+        "I don't agree with this approach.",
+        "This is not what I expected.",
+        "I'm concerned about the timeline.",
+        
+        # Frasi chiaramente tossiche
+        "This is completely stupid.",
+        "You're wasting everyone's time.",
+        "You have no idea what you're talking about.",
+        "Shut up and let someone competent handle this."
+    ]
+    
+    results = []
+    for phrase in test_phrases:
+        try:
+            result = await toxicity_detector.detect(phrase)
+            results.append({
+                "text": phrase,
+                "toxicity_score": result.toxicity_score,
+                "is_toxic": result.is_toxic,
+                "severity": result.severity.value,
+                "confidence": result.confidence
+            })
+        except Exception as e:
+            results.append({
+                "text": phrase,
+                "error": str(e)
+            })
+    
+    return {
+        "test_phrases_count": len(test_phrases),
+        "results": results,
+        "note": "Check for false positives (innocent phrases marked toxic)"
     }

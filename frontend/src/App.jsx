@@ -41,12 +41,19 @@ function App() {
       color: '#5856D6',
       showDetails: true
     },
-    timeline: {
+    timelineSentiment: {
       participantFilter: null,
       color: '#00C7BE',
       showGrid: true,
       showArea: true,
-      metric: 'sentiment' // 'sentiment' or 'toxicity'
+      metric: 'sentiment'
+    },
+    timelineToxicity: {
+      participantFilter: null,
+      color: '#FF6B6B',
+      showGrid: true,
+      showArea: true,
+      metric: 'toxicity'
     },
     messageStream: {
       participantFilter: null,
@@ -66,14 +73,17 @@ function App() {
   const loadInitialData = async () => {
     setLoading(true)
     try {
+      // Carica partecipanti
       const respPart = await fetch(`${API_URL}/participants`)
       const dataPart = await respPart.json()
       setParticipants(dataPart.participants)
 
+      // Carica meeting
       const response = await fetch(`${API_URL}/meeting/mtg001/analysis`)
       if (!response.ok) throw new Error(`Status ${response.status}`)
       const data = await response.json()
       setMeetingData(data)
+      setError(null)
     } catch (err) {
       setError('Unable to load meeting data')
     } finally {
@@ -179,7 +189,7 @@ function App() {
             <div style={styles.logoCircle}>MI</div>
             <div>
               <h1 style={styles.title}>Meeting Intelligence</h1>
-              <p style={styles.subtitle}>Session MTG-001 · Real-time Analytics</p>
+              <p style={styles.subtitle}>MTG-001 · Real-time Analytics</p>
             </div>
           </div>
         </div>
@@ -297,23 +307,45 @@ function App() {
             })()}
           </CustomizableWidget>
 
-          {/* Timeline Widget - Wide */}
+          {/* Timeline Sentiment Widget - Wide */}
           <CustomizableWidget
-            widgetId="timeline"
-            title={widgetConfigs.timeline.metric === 'sentiment' ? 'Sentiment Timeline' : 'Toxicity Timeline'}
-            config={widgetConfigs.timeline}
+            widgetId="timelineSentiment"
+            title="Sentiment Timeline"
+            config={widgetConfigs.timelineSentiment}
             participants={participants}
-            onConfigChange={(updates) => updateWidgetConfig('timeline', updates)}
+            onConfigChange={(updates) => updateWidgetConfig('timelineSentiment', updates)}
             openSettings={openSettings}
             setOpenSettings={setOpenSettings}
             wide
           >
             {(() => {
-              const data = getFilteredTranscript('timeline')
+              const data = getFilteredTranscript('timelineSentiment')
               return (
                 <TimelineChart
                   messages={data}
-                  config={widgetConfigs.timeline}
+                  config={widgetConfigs.timelineSentiment}
+                />
+              )
+            })()}
+          </CustomizableWidget>
+
+          {/* Timeline Toxicity Widget - Wide */}
+          <CustomizableWidget
+            widgetId="timelineToxicity"
+            title="Toxicity Timeline"
+            config={widgetConfigs.timelineToxicity}
+            participants={participants}
+            onConfigChange={(updates) => updateWidgetConfig('timelineToxicity', updates)}
+            openSettings={openSettings}
+            setOpenSettings={setOpenSettings}
+            wide
+          >
+            {(() => {
+              const data = getFilteredTranscript('timelineToxicity')
+              return (
+                <TimelineChart
+                  messages={data}
+                  config={widgetConfigs.timelineToxicity}
                 />
               )
             })()}
@@ -796,13 +828,16 @@ function TimelineChart({ messages, config }) {
 
   // Prepara dati per il grafico
   const dataPoints = messages.map((msg, idx) => {
+    // SENTIMENT: usa score diretto (high = positive)
+    // TOXICITY: usa score diretto (high = toxic)
     const score = config.metric === 'sentiment' 
       ? msg.sentiment.score 
-      : (1 - msg.toxicity.toxicity_score) // Invertiamo toxicity per visualizzare meglio
+      : msg.toxicity.toxicity_score  // NON invertire - raw score
     
     return {
       index: idx,
       score: score,
+      rawScore: config.metric === 'sentiment' ? msg.sentiment.score : msg.toxicity.toxicity_score,
       timestamp: msg.from,
       message: msg.text,
       nickname: msg.nickname
@@ -826,10 +861,16 @@ function TimelineChart({ messages, config }) {
     : null
 
   // Colore basato su metric
-  const lineColor = config.metric === 'sentiment' ? '#00C7BE' : '#FF9500'
+  const lineColor = config.color || (config.metric === 'sentiment' ? '#00C7BE' : '#FF6B6B')
   
   // Media per riferimento
   const avgScore = dataPoints.reduce((sum, p) => sum + p.score, 0) / dataPoints.length
+
+  // Label per tooltip
+  const getMetricLabel = () => config.metric === 'sentiment' ? 'Sentiment' : 'Toxicity'
+  const getMetricDescription = () => config.metric === 'sentiment' 
+    ? 'Higher is better' 
+    : 'Higher is worse (more toxic)'
 
   return (
     <div style={styles.timelineContainer}>
@@ -971,8 +1012,11 @@ function TimelineChart({ messages, config }) {
             </span>
           </div>
           <div style={styles.tooltipScore}>
-            Score: <strong style={{ color: lineColor }}>
-              {(dataPoints[hoveredPoint].score * 100).toFixed(0)}%
+            {getMetricLabel()}: <strong style={{ color: lineColor }}>
+              {config.metric === 'sentiment' 
+                ? `${(dataPoints[hoveredPoint].rawScore * 100).toFixed(0)}%`
+                : `${(dataPoints[hoveredPoint].rawScore * 100).toFixed(0)}% toxic`
+              }
             </strong>
           </div>
           <div style={styles.tooltipMessage}>
