@@ -758,20 +758,18 @@ function MessageBubble({ message, config }) {
   }
 
   const getToxicityBadge = (toxicity) => {
-    if (!toxicity.is_toxic) return null
-    
-    // Colore basato su severity
-    const colors = {
-      low: '#FFCC00',
-      medium: '#FF9500',
-      high: '#FF3B30'
-    }
-    
-    return {
-      text: toxicity.severity.toUpperCase(),
-      color: colors[toxicity.severity] || '#FF3B30'
-    }
+  // Mostra SEMPRE il badge con severity level
+  const colors = {
+    low: '#34C759',    // Verde - safe
+    medium: '#FF9500', // Arancione - warning
+    high: '#FF3B30'    // Rosso - danger
   }
+  
+  return {
+    text: toxicity.severity.toUpperCase(),
+    color: colors[toxicity.severity] || '#8e8e93'
+  }
+}
 
   const badge = getToxicityBadge(message.toxicity)
 
