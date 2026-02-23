@@ -101,7 +101,8 @@ function App() {
 
   // Funzione per filtrare transcript in base al widget config
   const getFilteredTranscript = (widgetId) => {
-    if (!meetingData) return []
+    // Fix: Check anche che transcript esista
+    if (!meetingData || !meetingData.transcript) return []
     
     const config = widgetConfigs[widgetId]
     if (!config.participantFilter) {
@@ -627,9 +628,13 @@ function WidgetSettings({ config, participants, onConfigChange }) {
             min="5"
             max="100"
             value={config.limit}
-            onChange={(e) =>
-              onConfigChange({ limit: parseInt(e.target.value) })
-            }
+            onChange={(e) => {
+              // Fix: Validazione parseInt con bounds check
+              const newLimit = parseInt(e.target.value)
+              if (!isNaN(newLimit) && newLimit >= 5 && newLimit <= 100) {
+                onConfigChange({ limit: newLimit })
+              }
+            }}
             style={styles.numberInput}
           />
         </div>
@@ -743,8 +748,8 @@ function MessageStream({ messages, config }) {
 
   return (
     <div style={styles.messageStreamContainer}>
-      {messages.map((msg, idx) => (
-        <MessageBubble key={idx} message={msg} config={config} />
+      {messages.map((msg) => (
+        <MessageBubble key={msg.uid} message={msg} config={config} />
       ))}
     </div>
   )
@@ -758,18 +763,21 @@ function MessageBubble({ message, config }) {
   }
 
   const getToxicityBadge = (toxicity) => {
-  // Mostra SEMPRE il badge con severity level
-  const colors = {
-    low: '#34C759',    // Verde - safe
-    medium: '#FF9500', // Arancione - warning
-    high: '#FF3B30'    // Rosso - danger
+    // Mostra SEMPRE il badge con il severity level
+    // Non gating su is_toxic - mostriamo tutti i livelli
+    
+    // Colore basato su severity
+    const colors = {
+      low: '#34C759',    // Verde - safe
+      medium: '#FF9500', // Arancione - warning
+      high: '#FF3B30'    // Rosso - danger
+    }
+    
+    return {
+      text: toxicity.severity.toUpperCase(),
+      color: colors[toxicity.severity] || '#8e8e93'
+    }
   }
-  
-  return {
-    text: toxicity.severity.toUpperCase(),
-    color: colors[toxicity.severity] || '#8e8e93'
-  }
-}
 
   const badge = getToxicityBadge(message.toxicity)
 
@@ -786,16 +794,15 @@ function MessageBubble({ message, config }) {
           >
             {(message.sentiment.score * 100).toFixed(0)}%
           </span>
-          {badge && (
-            <span
-              style={{
-                ...styles.toxicBadge,
-                backgroundColor: badge.color
-              }}
-            >
-              {badge.text}
-            </span>
-          )}
+          {/* Fix: Rimosso check ridondante - badge sempre definito */}
+          <span
+            style={{
+              ...styles.toxicBadge,
+              backgroundColor: badge.color
+            }}
+          >
+            {badge.text}
+          </span>
         </div>
       </div>
       <p style={styles.bubbleText}>{message.text}</p>
@@ -843,7 +850,13 @@ function TimelineChart({ messages, config }) {
   })
 
   // Scale
-  const xScale = (index) => padding.left + (index / (dataPoints.length - 1)) * chartWidth
+  const xScale = (index) => {
+    // Fix: Evita division by zero se c'è un solo messaggio
+    if (dataPoints.length === 1) {
+      return padding.left + chartWidth / 2  // Centro del grafico
+    }
+    return padding.left + (index / (dataPoints.length - 1)) * chartWidth
+  }
   const yScale = (score) => padding.top + (1 - score) * chartHeight
 
   // Genera path per la linea

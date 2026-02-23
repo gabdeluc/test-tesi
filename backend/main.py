@@ -129,6 +129,12 @@ def generate_mock_transcript(num_entries: int = 20) -> List[TranscriptEntry]:
     Pesca casualmente da TUTTE le categorie del dataset (positive, neutral, toxic, ecc.)
     per simulare una riunione realistica con variazioni naturali.
     """
+    # Fix: Validazione arrays vuoti
+    if not PARTICIPANTS:
+        raise ValueError("PARTICIPANTS list is empty - cannot generate transcript")
+    if not SAMPLE_PHRASES:
+        raise ValueError("SAMPLE_PHRASES list is empty - cannot generate transcript")
+    
     transcript = []
     current_time = 0
     
@@ -388,6 +394,19 @@ async def get_transcript_with_unified_analysis(
     
     # 5. Toxicity detection (batch) - NUOVO: usa detect() non predict()
     toxicity_results = await toxicity_detector.detect_batch(texts)
+    
+    # Fix: Validazione lunghezze array prima di combinare
+    if len(sentiment_results.predictions) != len(transcript):
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Sentiment predictions mismatch: expected {len(transcript)}, got {len(sentiment_results.predictions)}"
+        )
+    
+    if len(toxicity_results.results) != len(transcript):
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Toxicity results mismatch: expected {len(transcript)}, got {len(toxicity_results.results)}"
+        )
     
     # 6. Combina transcript con analisi
     enriched_transcript = []
